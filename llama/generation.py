@@ -114,6 +114,8 @@ class Llama:
             if not torch.distributed.is_initialized():
                 torch.distributed.init_process_group("nccl")
                 runtime = "nccl"
+                torch.cuda.empty_cache()
+
         except RuntimeError as error:
             print(f"Can't use NCCL (Nvidia CUDA), trying Gloo - error was {error}")
             try:
