@@ -254,7 +254,13 @@ class Llama:
 
         min_prompt_len = min(len(t) for t in prompt_tokens)
         max_prompt_len = max(len(t) for t in prompt_tokens)
-        assert max_prompt_len <= params.max_seq_len
+        if not max_prompt_len <= params.max_seq_len:
+            self.logger.error(
+                "Prompt length %s is longer than max_seq_len parameter %s",
+                max_prompt_len,
+                params.max_seq_len,
+            )
+            sys.exit(1)
         total_len = min(params.max_seq_len, max_gen_len + max_prompt_len)
 
         pad_id = self.tokenizer.pad_id
