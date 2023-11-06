@@ -100,7 +100,7 @@ If a question does not make any sense, or is not factually coherent, explain why
         for msg in dialog:
             print(f"{msg['role'].capitalize()}: {msg['content']}\n")
         print(
-            f"> {result['generation']['role'].capitalize()}: {result['generation']['content']}"
+            f"> {result.get('generation', {}).get('role', '<unset role>').capitalize()}: {result.get('generation', {}).get('content', '<no content was returned')}"
         )
         print("\n==================================\n")
 
