@@ -1,3 +1,5 @@
+"""tokenizer things """
+
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
@@ -13,6 +15,7 @@ logger = getLogger()
 
 class Tokenizer:
     """tokenizing and encoding/decoding text using SentencePiece."""
+
     def __init__(self, model_path: str):
         """
         Initializes the Tokenizer with a SentencePiece model.
@@ -22,8 +25,9 @@ class Tokenizer:
         """
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        self.sp_model = SentencePieceProcessor(model_file=model_path)
-        logger.info(f"Reloaded SentencePiece model from {model_path}")
+        # pylint: disable=unexpected-keyword-arg
+        self.sp_model = SentencePieceProcessor(model_file=model_path)  # type: ignore
+        logger.info("Reloaded SentencePiece model from %s", model_path)
 
         # BOS / EOS token IDs
         self.n_words: int = self.sp_model.vocab_size()
@@ -31,9 +35,12 @@ class Tokenizer:
         self.eos_id: int = self.sp_model.eos_id()
         self.pad_id: int = self.sp_model.pad_id()
         logger.info(
-            f"#words: {self.n_words} - BOS ID: {self.bos_id} - EOS ID: {self.eos_id}"
+            "#words: %s - BOS ID: %s - EOS ID: %s",
+            self.n_words,
+            self.bos_id,
+            self.eos_id,
         )
-        assert self.sp_model.vocab_size() == self.sp_model.get_piece_size()
+        assert self.sp_model.vocab_size() == self.sp_model.GetPieceSize()
 
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
         """
@@ -47,8 +54,8 @@ class Tokenizer:
         Returns:
             List[int]: A list of token IDs.
         """
-        assert type(s) is str
-        t = self.sp_model.encode(s)
+        assert isinstance(s, str)
+        t = self.sp_model.Encode(s)
         if bos:
             t = [self.bos_id] + t
         if eos:
@@ -65,4 +72,4 @@ class Tokenizer:
         Returns:
             str: The decoded string.
         """
-        return self.sp_model.decode(t)
+        return self.sp_model.Decode(t)

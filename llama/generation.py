@@ -1,12 +1,18 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+This software may be used and distributed according
+to the terms of the Llama 2 Community License Agreement.
+
+"""
 
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, TypedDict
+import uuid
 
 import torch
 import torch.nn.functional as F
@@ -16,24 +22,43 @@ from fairscale.nn.model_parallel.initialize import (
     model_parallel_is_initialized,
 )
 
+
 from llama.model import ModelArgs, Transformer
 from llama.tokenizer import Tokenizer
+
+
+class JSONFormatter(logging.Formatter):
+    """formats things for log purposes"""
+
+    def format(self, record: logging.LogRecord):
+        """format the message"""
+        return json.dumps(
+            {"level": record.levelname, "message": record.getMessage()},
+            default=str,
+        )
+
 
 Role = Literal["system", "user", "assistant"]
 
 
 class Message(TypedDict):
+    """message in a dialog"""
+
     role: Role
     content: str
 
 
 class CompletionPrediction(TypedDict, total=False):
+    """prediction for a single completion"""
+
     generation: str
     tokens: List[str]  # not required
     logprobs: List[float]  # not required
 
 
 class ChatPrediction(TypedDict, total=False):
+    """prediction for a single chat"""
+
     generation: Message
     tokens: List[str]  # not required
     logprobs: List[float]  # not required
@@ -49,6 +74,8 @@ UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
 
 
 class Llama:
+    """Llama class"""
+
     @staticmethod
     def build(
         ckpt_dir: str,
@@ -77,25 +104,38 @@ class Llama:
                 or if the model parallel size does not match the number of checkpoint files.
 
         Note:
-            This method initializes the distributed process group, sets the device to CUDA,
+            This method initializes the distributed process group, sets the
+            device to CUDA if available, or fails back to gloo if not,
             and loads the pre-trained model and tokenizer.
 
         """
-        if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group("nccl")
+        runtime = "gloo"
+        try:
+            if not torch.distributed.is_initialized():
+                torch.distributed.init_process_group("nccl")
+                runtime = "nccl"
+        except RuntimeError as error:
+            print(f"Can't use NCCL (Nvidia CUDA), trying Gloo - error was {error}")
+            try:
+                torch.distributed.init_process_group("gloo")
+            except RuntimeError as runtime_error:
+                print(f"Can't use Gloo runtime, bailing! - error was {runtime_error}")
+                sys.exit(1)
+
         if not model_parallel_is_initialized():
             if model_parallel_size is None:
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
             initialize_model_parallel(model_parallel_size)
 
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        torch.cuda.set_device(local_rank)
+        # local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        # if runtime == "nccl":
+        #     torch.cuda.set_device(local_rank)
 
         # seed must be the same in all processes
         torch.manual_seed(seed)
 
-        if local_rank > 0:
-            sys.stdout = open(os.devnull, "w")
+        # if local_rank > 0:
+        #     sys.stdout = open(os.devnull, "w")
 
         start_time = time.time()
         checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
@@ -105,32 +145,64 @@ class Llama:
         ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {model_parallel_size}"
         ckpt_path = checkpoints[get_model_parallel_rank()]
         checkpoint = torch.load(ckpt_path, map_location="cpu")
-        with open(Path(ckpt_dir) / "params.json", "r") as f:
+        with open(Path(ckpt_dir) / "params.json", "r", encoding="utf-8") as f:
             params = json.loads(f.read())
 
+        if runtime == "nccl":
+            device = "cuda"
+        else:
+            # https://pytorch.org/docs/stable/tensors.html
+            # torch.set_default_tensor_type(torch.DoubleTensor)
+            # apple silicon support
+            if torch.backends.mps.is_available():
+                device = "mps"
+                torch.set_default_dtype(torch.float32)
+            else:
+                # don't have to set the default device here because the default is CPU
+                # https://pytorch.org/docs/stable/generated/torch.set_default_device.html#torch-set-default-device
+
+                device = "cpu"
+                # valid dtypes: https://pytorch.org/docs/stable/tensor_attributes.html#torch.dtype
+                torch.set_default_dtype(torch.float64)
+        torch.set_default_device(device)
+
         model_args: ModelArgs = ModelArgs(
+            runtime=runtime,
+            device=device,
             max_seq_len=max_seq_len,
             max_batch_size=max_batch_size,
             **params,
         )
         tokenizer = Tokenizer(model_path=tokenizer_path)
         model_args.vocab_size = tokenizer.n_words
-        torch.set_default_tensor_type(torch.cuda.HalfTensor)
+
         model = Transformer(model_args)
         model.load_state_dict(checkpoint, strict=False)
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
 
-        return Llama(model, tokenizer)
+        return Llama(model, tokenizer, runtime, device)
 
-    def __init__(self, model: Transformer, tokenizer: Tokenizer):
+    def __init__(
+        self, model: Transformer, tokenizer: Tokenizer, runtime: str, device: str
+    ):
         self.model = model
         self.tokenizer = tokenizer
+        self.runtime = runtime
+        self.device = device
+
+        self.logger = logging.getLogger("llama")
+        handler = logging.FileHandler("llama_llm_logs.json")
+        handler.setFormatter(JSONFormatter())
+        self.logger.addHandler(handler)
+        self.logger.addHandler(logging.StreamHandler(sys.stdout))
+        self.logger.setLevel(logging.INFO)
 
     @torch.inference_mode()
     def generate(
         self,
         prompt_tokens: List[List[int]],
         max_gen_len: int,
+        completion_id: str,
         temperature: float = 0.6,
         top_p: float = 0.9,
         logprobs: bool = False,
@@ -140,21 +212,42 @@ class Llama:
         Generate text sequences based on provided prompts using the language generation model.
 
         Args:
-            prompt_tokens (List[List[int]]): List of tokenized prompts, where each prompt is represented as a list of integers.
+            prompt_tokens (List[List[int]]): List of tokenized prompts, where each prompt
+            is represented as a list of integers.
             max_gen_len (int): Maximum length of the generated text sequence.
-            temperature (float, optional): Temperature value for controlling randomness in sampling. Defaults to 0.6.
-            top_p (float, optional): Top-p probability threshold for nucleus sampling. Defaults to 0.9.
-            logprobs (bool, optional): Flag indicating whether to compute token log probabilities. Defaults to False.
-            echo (bool, optional): Flag indicating whether to include prompt tokens in the generated output. Defaults to False.
+            temperature (float, optional): Temperature value for controlling randomness in sampling.
+            Defaults to 0.6.
+            top_p (float, optional): Top-p probability threshold for nucleus sampling.
+            Defaults to 0.9.
+            logprobs (bool, optional): Flag indicating whether to compute token log probabilities.
+            Defaults to False.
+            echo (bool, optional): Flag indicating whether to include prompt tokens in the
+            generated output. Defaults to False.
 
         Returns:
-            Tuple[List[List[int]], Optional[List[List[float]]]]: A tuple containing generated token sequences and, if logprobs is True, corresponding token log probabilities.
+            Tuple[List[List[int]], Optional[List[List[float]]]]:
+                A tuple containing generated token sequences and, if logprobs is True,
+                corresponding token log probabilities.
 
         Note:
-            This method uses the provided prompts as a basis for generating text. It employs nucleus sampling to produce text with controlled randomness.
+            This method uses the provided prompts as a basis for generating text.
+            It employs nucleus sampling to produce text with controlled randomness.
             If logprobs is True, token log probabilities are computed for each generated token.
 
         """
+
+        self.logger.info(
+            {
+                "action": "generate_start",
+                "completion_id": completion_id,
+                "temperature": temperature,
+                "top_p": top_p,
+                "logprobs": logprobs,
+                "max_gen_len": max_gen_len,
+                "prompt_tokens": prompt_tokens,
+            }
+        )
+
         params = self.model.params
         bsz = len(prompt_tokens)
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
@@ -165,14 +258,18 @@ class Llama:
         total_len = min(params.max_seq_len, max_gen_len + max_prompt_len)
 
         pad_id = self.tokenizer.pad_id
-        tokens = torch.full((bsz, total_len), pad_id, dtype=torch.long, device="cuda")
+        tokens = torch.full(
+            (bsz, total_len), pad_id, dtype=torch.long, device=self.device
+        )
         for k, t in enumerate(prompt_tokens):
-            tokens[k, : len(t)] = torch.tensor(t, dtype=torch.long, device="cuda")
+            tokens[k, : len(t)] = torch.tensor(t, dtype=torch.long, device=self.device)
+
         if logprobs:
             token_logprobs = torch.zeros_like(tokens, dtype=torch.float)
-
+        else:
+            token_logprobs = None
         prev_pos = 0
-        eos_reached = torch.tensor([False] * bsz, device="cuda")
+        eos_reached = torch.tensor([False] * bsz, device=self.device)
         input_text_mask = tokens != pad_id
         if min_prompt_len == total_len:
             logits = self.model.forward(tokens, prev_pos)
@@ -184,6 +281,7 @@ class Llama:
             )
 
         for cur_pos in range(min_prompt_len, total_len):
+            self.model.to(self.device)
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
@@ -197,7 +295,7 @@ class Llama:
                 input_text_mask[:, cur_pos], tokens[:, cur_pos], next_token
             )
             tokens[:, cur_pos] = next_token
-            if logprobs:
+            if logprobs and token_logprobs is not None:
                 token_logprobs[:, prev_pos + 1 : cur_pos + 1] = -F.cross_entropy(
                     input=logits.transpose(1, 2),
                     target=tokens[:, prev_pos + 1 : cur_pos + 1],
@@ -211,7 +309,7 @@ class Llama:
             if all(eos_reached):
                 break
 
-        if logprobs:
+        if logprobs and token_logprobs is not None:
             token_logprobs = token_logprobs.tolist()
         out_tokens, out_logprobs = [], []
         for i, toks in enumerate(tokens.tolist()):
@@ -219,20 +317,33 @@ class Llama:
             start = 0 if echo else len(prompt_tokens[i])
             toks = toks[start : len(prompt_tokens[i]) + max_gen_len]
             probs = None
-            if logprobs:
+            if logprobs and token_logprobs is not None:
                 probs = token_logprobs[i][start : len(prompt_tokens[i]) + max_gen_len]
             # cut to eos tok if any
             if self.tokenizer.eos_id in toks:
                 eos_idx = toks.index(self.tokenizer.eos_id)
                 toks = toks[:eos_idx]
-                probs = probs[:eos_idx] if logprobs else None
+                if logprobs and token_logprobs is not None and probs is not None:
+                    probs = probs[:eos_idx] if logprobs else None
             out_tokens.append(toks)
             out_logprobs.append(probs)
+
+        log_result = {
+            "action": "generate_end",
+            "completion_id": completion_id,
+            "out_tokens": out_tokens,
+        }
+        if logprobs:
+            log_result["out_logprobs"] = out_logprobs
+
+        self.logger.info(log_result)
+
         return (out_tokens, out_logprobs if logprobs else None)
 
     def text_completion(
         self,
         prompts: List[str],
+        completion_id: str,
         temperature: float = 0.6,
         top_p: float = 0.9,
         max_gen_len: Optional[int] = None,
@@ -244,25 +355,47 @@ class Llama:
 
         Args:
             prompts (List[str]): List of text prompts for completion.
-            temperature (float, optional): Temperature value for controlling randomness in sampling. Defaults to 0.6.
-            top_p (float, optional): Top-p probability threshold for nucleus sampling. Defaults to 0.9.
-            max_gen_len (Optional[int], optional): Maximum length of the generated completion sequence.
+            temperature (float, optional): Temperature value for controlling randomness in sampling.
+                Defaults to 0.6.
+            top_p (float, optional): Top-p probability threshold for nucleus sampling.
+                Defaults to 0.9.
+            max_gen_len (Optional[int], optional): Maximum length of the generated
+                completion sequence.
                 If not provided, it's set to the model's maximum sequence length minus 1.
-            logprobs (bool, optional): Flag indicating whether to compute token log probabilities. Defaults to False.
-            echo (bool, optional): Flag indicating whether to include prompt tokens in the generated output. Defaults to False.
+            logprobs (bool, optional): Flag indicating whether to compute token log probabilities.
+                Defaults to False.
+            echo (bool, optional): Flag indicating whether to include prompt tokens in the
+                generated output.
+                Defaults to False.
 
         Returns:
-            List[CompletionPrediction]: List of completion predictions, each containing the generated text completion.
+            List[CompletionPrediction]: List of completion predictions, each containing the
+                generated text completion.
 
         Note:
-            This method generates text completions for the provided prompts, employing nucleus sampling to introduce controlled randomness.
+            This method generates text completions for the provided prompts, employing nucleus
+                sampling to introduce
+            controlled randomness.
             If logprobs is True, token log probabilities are computed for each generated token.
 
         """
+        self.logger.info(
+            {
+                "action": "text_completion_start",
+                "completion_id": completion_id,
+                "prompts": prompts,
+                "temperature": temperature,
+                "top_p": top_p,
+                "logprobs": logprobs,
+                "max_gen_len": max_gen_len,
+            }
+        )
+
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
         prompt_tokens = [self.tokenizer.encode(x, bos=True, eos=False) for x in prompts]
         generation_tokens, generation_logprobs = self.generate(
+            completion_id=completion_id,
             prompt_tokens=prompt_tokens,
             max_gen_len=max_gen_len,
             temperature=temperature,
@@ -271,15 +404,27 @@ class Llama:
             echo=echo,
         )
         if logprobs:
-            return [
+            result = [
                 {
                     "generation": self.tokenizer.decode(t),
                     "tokens": [self.tokenizer.decode(x) for x in t],
                     "logprobs": logprobs_i,
                 }
-                for t, logprobs_i in zip(generation_tokens, generation_logprobs)
+                for t, logprobs_i in zip(generation_tokens, generation_logprobs)  # type: ignore
             ]
-        return [{"generation": self.tokenizer.decode(t)} for t in generation_tokens]
+        else:
+            result = [
+                {"generation": self.tokenizer.decode(t)} for t in generation_tokens
+            ]
+
+        self.logger.info(
+            {
+                "action": "text_completion_end",
+                "completion_id": completion_id,
+                "generation": result,
+            },
+        )
+        return result  # type: ignore
 
     def chat_completion(
         self,
@@ -313,6 +458,22 @@ class Llama:
             If logprobs is True, token log probabilities are computed for each generated token.
 
         """
+
+        # this keeps track of a single "completion" requerst
+        completion_id = uuid.uuid4().hex
+
+        self.logger.info(
+            {
+                "action": "generate_start",
+                "completion_id": completion_id,
+                "temperature": temperature,
+                "top_p": top_p,
+                "logprobs": logprobs,
+                "max_gen_len": max_gen_len,
+                "dialogs": dialogs,
+            }
+        )
+
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
         prompt_tokens = []
@@ -367,9 +528,10 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
+            completion_id=completion_id,
         )
         if logprobs:
-            return [
+            result = [
                 {
                     "generation": {
                         "role": "assistant",
@@ -381,10 +543,10 @@ class Llama:
                     "logprobs": logprobs_i,
                 }
                 for t, logprobs_i, unsafe in zip(
-                    generation_tokens, generation_logprobs, unsafe_requests
+                    generation_tokens, generation_logprobs, unsafe_requests  # type: ignore
                 )
             ]
-        return [
+        result = [
             {
                 "generation": {
                     "role": "assistant",
@@ -393,6 +555,16 @@ class Llama:
             }
             for t, unsafe in zip(generation_tokens, unsafe_requests)
         ]
+
+        self.logger.info(
+            {
+                "action": "chat_completion_end",
+                "completion_id": completion_id,
+                "result": result,
+            },
+        )
+
+        return result  # type: ignore
 
 
 def sample_top_p(probs, p):

@@ -1,5 +1,8 @@
+"""
+chat completion creator
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
+"""
 
 from typing import List, Optional
 
@@ -27,8 +30,10 @@ def main(
             Defaults to 0.6.
         top_p (float, optional): The top-p sampling parameter for controlling diversity in generation.
             Defaults to 0.9.
-        max_seq_len (int, optional): The maximum sequence length for input prompts. Defaults to 512.
-        max_batch_size (int, optional): The maximum batch size for generating sequences. Defaults to 8.
+        max_seq_len (int, optional): The maximum sequence length for input prompts.
+            Defaults to 512.
+        max_batch_size (int, optional): The maximum batch size for generating sequences.
+            Defaults to 8.
         max_gen_len (int, optional): The maximum length of generated sequences. If None, it will be
             set to the model's max sequence length. Defaults to None.
     """

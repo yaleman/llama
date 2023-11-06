@@ -1,3 +1,4 @@
+""" model things """
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
@@ -18,6 +19,10 @@ from torch import nn
 
 @dataclass
 class ModelArgs:
+    """arguments for the model"""
+
+    runtime: str  # nccl, gloo, mpi - https://pytorch.org/docs/stable/distributed.html
+    device: str  # cpu, cuda or mps (apple silicon)
     dim: int = 4096
     n_layers: int = 32
     n_heads: int = 32
@@ -32,6 +37,8 @@ class ModelArgs:
 
 
 class RMSNorm(torch.nn.Module):
+    """something?"""
+
     def __init__(self, dim: int, eps: float = 1e-6):
         """
         Initialize the RMSNorm normalization layer.
@@ -93,8 +100,8 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     Returns:
         torch.Tensor: Precomputed frequency tensor with complex exponentials.
 
-    
-        
+
+
 
     """
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
@@ -133,6 +140,7 @@ def apply_rotary_emb(
     xq: torch.Tensor,
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
+    args: ModelArgs,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Apply rotary embeddings to input tensors using the given frequency tensor.
@@ -150,11 +158,13 @@ def apply_rotary_emb(
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
 
-        
+
 
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    xq_.to(args.device)
+    xk_.to(args.device)
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
@@ -175,6 +185,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 class Attention(nn.Module):
     """Multi-head attention module."""
+
     def __init__(self, args: ModelArgs):
         """
         Initialize the Attention module.
@@ -232,23 +243,44 @@ class Attention(nn.Module):
             input_is_parallel=True,
             init_method=lambda x: x,
         )
-
-        self.cache_k = torch.zeros(
-            (
-                args.max_batch_size,
-                args.max_seq_len,
-                self.n_local_kv_heads,
-                self.head_dim,
-            )
-        ).cuda()
-        self.cache_v = torch.zeros(
-            (
-                args.max_batch_size,
-                args.max_seq_len,
-                self.n_local_kv_heads,
-                self.head_dim,
-            )
-        ).cuda()
+        if args.runtime == "nncl":
+            # print("Using CUDA for torch.zeros")
+            self.cache_k = torch.zeros(
+                (
+                    args.max_batch_size,
+                    args.max_seq_len,
+                    self.n_local_kv_heads,
+                    self.head_dim,
+                )
+            ).cuda()
+            self.cache_v = torch.zeros(
+                (
+                    args.max_batch_size,
+                    args.max_seq_len,
+                    self.n_local_kv_heads,
+                    self.head_dim,
+                )
+            ).cuda()
+        else:
+            self.cache_k = torch.zeros(
+                (
+                    args.max_batch_size,
+                    args.max_seq_len,
+                    self.n_local_kv_heads,
+                    self.head_dim,
+                ),
+                device=torch.device(args.device),
+            ).to(args.device)
+            self.cache_v = torch.zeros(
+                (
+                    args.max_batch_size,
+                    args.max_seq_len,
+                    self.n_local_kv_heads,
+                    self.head_dim,
+                ),
+                device=torch.device(args.device),
+            ).to(args.device)
+        self.args = args
 
     def forward(
         self,
@@ -277,10 +309,13 @@ class Attention(nn.Module):
         xk = xk.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
 
-        xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
+        xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis, args=self.args), self.p
 
-        self.cache_k = self.cache_k.to(xq)
-        self.cache_v = self.cache_v.to(xq)
+        self.cache_k = self.cache_k.to(self.args.device)
+        self.cache_v = self.cache_v.to(self.args.device)
+
+        # self.cache_k = self.cache_k.to(xq)
+        # self.cache_v = self.cache_v.to(xq)
 
         self.cache_k[:bsz, start_pos : start_pos + seqlen] = xk
         self.cache_v[:bsz, start_pos : start_pos + seqlen] = xv
@@ -305,6 +340,8 @@ class Attention(nn.Module):
 
 
 class FeedForward(nn.Module):
+    """another module"""
+
     def __init__(
         self,
         dim: int,
@@ -345,10 +382,13 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x):
+        """forward embedding"""
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
 class TransformerBlock(nn.Module):
+    """transformer block"""
+
     def __init__(self, layer_id: int, args: ModelArgs):
         """
         Initialize a TransformerBlock.
@@ -411,12 +451,15 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
+    """transformer"""
+
     def __init__(self, params: ModelArgs):
         """
         Initialize a Transformer model.
 
         Args:
             params (ModelArgs): Model configuration parameters.
+            runtime: string runtime see llama/__init__.py for valid values
 
         Attributes:
             params (ModelArgs): Model configuration parameters.
@@ -433,9 +476,9 @@ class Transformer(nn.Module):
         self.params = params
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
-
+        self.runtime = params.runtime
         self.tok_embeddings = ParallelEmbedding(
-            params.vocab_size, params.dim, init_method=lambda x: x
+            params.vocab_size, params.dim, device=params.device, init_method=lambda x: x
         )
 
         self.layers = torch.nn.ModuleList()
@@ -448,9 +491,10 @@ class Transformer(nn.Module):
         )
 
         self.freqs_cis = precompute_freqs_cis(
-            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096. 
+            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096.
             # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
-            self.params.dim // self.params.n_heads, self.params.max_seq_len * 2
+            self.params.dim // self.params.n_heads,
+            self.params.max_seq_len * 2,
         )
 
     @torch.inference_mode()
@@ -468,7 +512,8 @@ class Transformer(nn.Module):
         """
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
-        self.freqs_cis = self.freqs_cis.to(h.device)
+        self.freqs_cis = self.freqs_cis.to(self.params.device)
+        # self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
         mask = None
