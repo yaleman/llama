@@ -199,6 +199,13 @@ class Llama:
         self.logger.addHandler(logging.StreamHandler(sys.stdout))
         self.logger.setLevel(logging.INFO)
 
+        self.logger.info(
+            {
+                "device": self.device,
+                "runtime": self.runtime,
+            }
+        )
+
     @torch.inference_mode()
     def generate(
         self,

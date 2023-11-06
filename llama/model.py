@@ -244,7 +244,7 @@ class Attention(nn.Module):
             init_method=lambda x: x,
         )
         if args.runtime == "nncl":
-            # print("Using CUDA for torch.zeros")
+            print("Using CUDA for torch.zeros")
             self.cache_k = torch.zeros(
                 (
                     args.max_batch_size,
@@ -262,6 +262,7 @@ class Attention(nn.Module):
                 )
             ).cuda()
         else:
+            print(f"Using {args.device} for torch.zeros")
             self.cache_k = torch.zeros(
                 (
                     args.max_batch_size,
