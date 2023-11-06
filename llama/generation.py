@@ -151,7 +151,7 @@ class Llama:
             params = json.loads(f.read())
 
         if runtime == "nccl":
-            device = "cuda:0"
+            device = "cuda"
         else:
             # https://pytorch.org/docs/stable/tensors.html
             # torch.set_default_tensor_type(torch.DoubleTensor)
@@ -177,6 +177,9 @@ class Llama:
         )
         tokenizer = Tokenizer(model_path=tokenizer_path)
         model_args.vocab_size = tokenizer.n_words
+        if device == "cuda":
+            # pylint: disable=E1101
+            torch.set_default_tensor_type(torch.cuda.HalfTensor)  # type: ignore
 
         model = Transformer(model_args)
         model.load_state_dict(checkpoint, strict=False)
