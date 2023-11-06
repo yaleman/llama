@@ -15,18 +15,19 @@ if [ ! -d "${MODEL_DIR}" ]; then
     fi
 fi
 
-if [ -z "${BATCH_SIZE}" ]; then
-    BATCH_SIZE=6
+if [ -z "${MAX_BATCH_SIZE}" ]; then
+    MAX_BATCH_SIZE=6
 fi
 
 echo "Using model ${MODEL_DIR}"
+echo "Using max_batch_size=${MAX_BATCH_SIZE}"
 
 torchrun --nproc_per_node "${NPROC_PER_NODE}" \
     example_chat_completion.py \
     --ckpt_dir "${MODEL_DIR}" \
     --tokenizer_path tokenizer.model \
     --max_seq_len 512 \
-    --max_batch_size "${BATCH_SIZE}"
+    --max_batch_size "${MAX_BATCH_SIZE}"
 
 
 # if you get this: "AssertionError: Loading a checkpoint for MP=1 but world size is 12"
