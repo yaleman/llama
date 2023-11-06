@@ -151,7 +151,7 @@ class Llama:
             params = json.loads(f.read())
 
         if runtime == "nccl":
-            device = "cuda"
+            device = "cuda:0"
         else:
             # https://pytorch.org/docs/stable/tensors.html
             # torch.set_default_tensor_type(torch.DoubleTensor)
