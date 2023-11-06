@@ -1,10 +1,13 @@
+""" stuff """
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
+from typing import List
+import uuid
 import fire
 
 from llama import Llama
-from typing import List
+
 
 def main(
     ckpt_dir: str,
@@ -28,7 +31,7 @@ def main(
         max_seq_len (int, optional): The maximum sequence length for input prompts. Defaults to 128.
         max_gen_len (int, optional): The maximum length of generated sequences. Defaults to 64.
         max_batch_size (int, optional): The maximum batch size for generating sequences. Defaults to 4.
-    """ 
+    """
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
@@ -43,25 +46,27 @@ def main(
         """A brief message congratulating the team on the launch:
 
         Hi everyone,
-        
+
         I just """,
         # Few shot prompt (providing a few examples before asking model to complete more);
         """Translate English to French:
-        
+
         sea otter => loutre de mer
         peppermint => menthe poivrée
         plush girafe => girafe peluche
         cheese =>""",
     ]
+    completion_id = uuid.uuid4().hex
     results = generator.text_completion(
         prompts,
         max_gen_len=max_gen_len,
         temperature=temperature,
         top_p=top_p,
+        completion_id=completion_id,
     )
     for prompt, result in zip(prompts, results):
         print(prompt)
-        print(f"> {result['generation']}")
+        print(f"> {result.get('generation')}")
         print("\n==================================\n")
 
 
