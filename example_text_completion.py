@@ -32,6 +32,7 @@ def main(
         max_gen_len (int, optional): The maximum length of generated sequences. Defaults to 64.
         max_batch_size (int, optional): The maximum batch size for generating sequences. Defaults to 4.
     """
+
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
