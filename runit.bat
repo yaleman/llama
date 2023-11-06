@@ -1,0 +1,1 @@
+torchrun --nproc-per-node 1 .\example_chat_completion.py --ckpt-dir .\llama-2-7b-chat --tokenizer-path .\tokenizer.model --max-seq-len 512 --max-batch-size 6
