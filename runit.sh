@@ -19,7 +19,7 @@ echo "Using model ${MODEL_DIR}"
 
 torchrun --nproc_per_node "${NPROC_PER_NODE}" \
     example_chat_completion.py \
-    --ckpt_dir ./llama-2-7b-chat/ \
+    --ckpt_dir "${MODEL_DIR}" \
     --tokenizer_path tokenizer.model \
     --max_seq_len 512 \
     --max_batch_size 6
