@@ -5,7 +5,9 @@
 NPROC_PER_NODE="1"
 # NPROC_PER_NODE="cpu"
 
-MODEL_DIR="./llama-2-7b-chat"
+if [ -z "${MODEL_DIR}" ]; then
+    MODEL_DIR="./llama-2-7b-chat"
+fi
 
 if [ ! -d "${MODEL_DIR}" ]; then
     MODEL_DIR="$(find .  -maxdepth 1 -type d -name 'llama-*' | head -n1| sed -E 's/^\.\///g')"
@@ -19,14 +21,19 @@ if [ -z "${MAX_BATCH_SIZE}" ]; then
     MAX_BATCH_SIZE=6
 fi
 
-echo "Using model ${MODEL_DIR}"
-echo "Using max_batch_size=${MAX_BATCH_SIZE}"
+if [ -z "${MAX_SEQ_LEN}" ]; then
+    MAX_SEQ_LEN=256
+fi
+
+echo "Using model ${MODEL_DIR} (set with MODEL_DIR env var)"
+echo "Using max_batch_size=${MAX_BATCH_SIZE} (set with MAX_BATCH_SIZE env var)"
+echo "Using max_seq_len=${MAX_SEQ_LEN} (set with MAX_SEQ_LEN env var)"
 
 torchrun --nproc_per_node "${NPROC_PER_NODE}" \
     example_chat_completion.py \
     --ckpt_dir "${MODEL_DIR}" \
     --tokenizer_path tokenizer.model \
-    --max_seq_len 512 \
+    --max_seq_len "${MAX_SEQ_LEN}" \
     --max_batch_size "${MAX_BATCH_SIZE}"
 
 
