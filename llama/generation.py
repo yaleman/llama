@@ -289,7 +289,7 @@ class Llama:
             )
 
         for cur_pos in range(min_prompt_len, total_len):
-            self.model.to(self.device)
+            # self.model.to(self.device)
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
