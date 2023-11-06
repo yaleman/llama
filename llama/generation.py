@@ -129,9 +129,9 @@ class Llama:
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
             initialize_model_parallel(model_parallel_size)
 
-        # local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        # if runtime == "nccl":
-        #     torch.cuda.set_device(local_rank)
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        if runtime == "nccl":
+            torch.cuda.set_device(local_rank)
 
         # seed must be the same in all processes
         torch.manual_seed(seed)
