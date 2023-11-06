@@ -8,7 +8,7 @@ NPROC_PER_NODE="1"
 MODEL_DIR="./llama-2-7b-chat"
 
 if [ ! -d "${MODEL_DIR}" ]; then
-    MODEL_DIR="$(find .  -maxdepth 1 -type d -name 'llama-*' | head -n1)"
+    MODEL_DIR="$(find .  -maxdepth 1 -type d -name 'llama-*' | head -n1| sed -E 's/^\.\///g')"
     if [ -z "${MODEL_DIR}" ]; then
         echo "Can't find model directory, quitting"
         exit 1
