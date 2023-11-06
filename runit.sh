@@ -8,8 +8,11 @@ NPROC_PER_NODE="1"
 MODEL_DIR="./llama-2-7b-chat"
 
 if [ ! -d "${MODEL_DIR}" ]; then
-    echo "Can't find model directory ${MODEL_DIR}, quitting"
-    exit 1
+    MODEL_DIR="$(find . -type d -name 'llama-*' -maxdepth 1 | head -n1)"
+    if [ -z "${MODEL_DIR}" ]; then
+        echo "Can't find model directory, quitting"
+        exit 1
+    fi
 fi
 
 torchrun --nproc_per_node "${NPROC_PER_NODE}" \
