@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 import uuid
 
 import torch
@@ -246,7 +246,7 @@ class Llama:
                 "top_p": top_p,
                 "logprobs": logprobs,
                 "max_gen_len": max_gen_len,
-                "prompt_tokens": prompt_tokens,
+                # "prompt_tokens": prompt_tokens,
             }
         )
 
@@ -338,15 +338,15 @@ class Llama:
             out_tokens.append(toks)
             out_logprobs.append(probs)
 
-        log_result = {
+        log_result: Dict[str, Any] = {
             "action": "generate_end",
             "completion_id": completion_id,
-            "out_tokens": out_tokens,
+            # "out_tokens": out_tokens,
         }
         if logprobs:
-            log_result["out_logprobs"] = out_logprobs
+            log_result["out_logprobs"] = out_logprobs  # type: ignore
 
-        self.logger.info(log_result)
+        self.logger.debug(log_result)
 
         # typing is hard I'll deal with this later  ... ugh?
         return (out_tokens, out_logprobs if logprobs else None)  # type: ignore
@@ -575,13 +575,13 @@ class Llama:
             for t, unsafe in zip(generation_tokens, unsafe_requests)
         ]
 
-        # self.logger.info(
-        #     {
-        #         "action": "chat_completion_end",
-        #         "completion_id": completion_id,
-        #         "result": result,
-        #     },
-        # )
+        self.logger.info(
+            {
+                "action": "chat_completion_end",
+                "completion_id": completion_id,
+                "result": result,
+            },
+        )
 
         return result  # type: ignore
 
