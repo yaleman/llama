@@ -21,8 +21,6 @@ from fairscale.nn.model_parallel.initialize import (  # type: ignore
     initialize_model_parallel,
     model_parallel_is_initialized,
 )
-from llama.logging import setup_logging
-
 from llama.model import ModelArgs, Transformer
 from llama.tokenizer import Tokenizer
 
@@ -37,7 +35,7 @@ class Message(TypedDict):
     content: str
 
 
-class CompletionPrediction(TypedDict, total=False):
+class CompletionPrediction(TypedDict):
     """prediction for a single completion"""
 
     generation: str
@@ -51,6 +49,7 @@ class ChatPrediction(TypedDict, total=False):
     generation: Message
     tokens: List[str]  # not required
     logprobs: List[float]  # not required
+    completion_id: str
 
 
 Dialog = List[Message]
@@ -71,6 +70,7 @@ class Llama:
         tokenizer_path: str,
         max_seq_len: int,
         max_batch_size: int,
+        logger: logging.Logger,
         model_parallel_size: Optional[int] = None,
         seed: int = 1,
     ) -> "Llama":
@@ -98,7 +98,6 @@ class Llama:
             and loads the pre-trained model and tokenizer.
 
         """
-        logger = setup_logging()
         logger.info({"message": "starting up!"})
 
         runtime = "gloo"
@@ -559,6 +558,7 @@ class Llama:
                     },
                     "tokens": [self.tokenizer.decode([x]) for x in t],
                     "logprobs": logprobs_i,
+                    "completion_id": completion_id,
                 }
                 for t, logprobs_i, unsafe in zip(
                     generation_tokens, generation_logprobs, unsafe_requests  # type: ignore
@@ -569,6 +569,7 @@ class Llama:
                 "generation": {
                     "role": "assistant",
                     "content": self.tokenizer.decode(t) if not unsafe else UNSAFE_ERROR,
+                    "completion_id": completion_id,
                 }
             }
             for t, unsafe in zip(generation_tokens, unsafe_requests)

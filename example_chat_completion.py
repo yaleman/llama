@@ -9,6 +9,7 @@ from typing import List, Optional
 import fire  # type: ignore
 
 from llama.generation import Llama, Dialog
+from llama.logging import setup_logging
 
 
 def main(
@@ -37,11 +38,14 @@ def main(
         max_gen_len (int, optional): The maximum length of generated sequences. If None, it will be
             set to the model's max sequence length. Defaults to None.
     """
+    logger = setup_logging()
+
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
+        logger=logger,
     )
 
     dialogs: List[Dialog] = [
@@ -100,11 +104,25 @@ If you don't know the answer to a question, please don't share false information
 
     for dialog, result in zip(dialogs, results):
         for msg in dialog:
-            print(f"{msg['role'].capitalize()}: {msg['content']}\n")
-        print(
-            f"> {result.get('generation', {}).get('role', '<unset role>').capitalize()}: {result.get('generation', {}).get('content', '<no content was returned')}"
-        )
-        print("\n==================================\n")
+            logger.info(
+                {
+                    "action": "chat_content",
+                    "request_role": msg["role"],
+                    "request": msg["content"],
+                    "response_role": result.get("generation", {}).get(
+                        "role", "<unset role>"
+                    ),
+                    "response": result.get("generation", {}).get(
+                        "content", "<no content was returned>"
+                    ),
+                    "completion_id": result.get("completion_id", "<unknown id>"),
+                }
+            )
+        #     # print(f"{msg['role'].capitalize()}: {msg['content']}\n")
+        # print(
+        #     f"> {result.get('generation', {}).get('role', '<unset role>').capitalize()}: {result.get('generation', {}).get('content', '<no content was returned')}"
+        # )
+        # print("\n==================================\n")
 
 
 if __name__ == "__main__":
