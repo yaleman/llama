@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
+from typing import List, Literal, Optional, Tuple, TypedDict
 import uuid
 
 import torch
@@ -21,37 +21,10 @@ from fairscale.nn.model_parallel.initialize import (  # type: ignore
     initialize_model_parallel,
     model_parallel_is_initialized,
 )
+from llama.logging import setup_logging
 
 from llama.model import ModelArgs, Transformer
 from llama.tokenizer import Tokenizer
-
-
-class JSONFormatter(logging.Formatter):
-    """formats things for logging purposes"""
-
-    def format(self, record: logging.LogRecord) -> str:
-        """format the message"""
-
-        msg = record.getMessage()
-        try:
-            res: Dict[str, Any] = json.loads(msg)
-        except json.JSONDecodeError as error:
-            print(f"Welp, failed to JSON decode {msg}: {error}")
-            res = {"message": msg}
-
-        if isinstance(res, str):
-            res = {"message": res}
-        elif isinstance(res, list):
-            res = {"messages": res}
-
-        if not isinstance(res, dict):
-            res = {"message": res}
-        res["level"] = record.levelname
-
-        return json.dumps(
-            res,
-            default=str,
-        )
 
 
 Role = Literal["system", "user", "assistant"]
@@ -125,6 +98,9 @@ class Llama:
             and loads the pre-trained model and tokenizer.
 
         """
+        logger = setup_logging()
+        logger.info({"message": "starting up!"})
+
         runtime = "gloo"
         try:
             if not torch.distributed.is_initialized():
@@ -201,24 +177,23 @@ class Llama:
         model.load_state_dict(checkpoint, strict=False)
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
 
-        return Llama(model, tokenizer, runtime, device)
+        return Llama(model, tokenizer, runtime, device, logger)
 
     def __init__(
-        self, model: Transformer, tokenizer: Tokenizer, runtime: str, device: str
+        self,
+        model: Transformer,
+        tokenizer: Tokenizer,
+        runtime: str,
+        device: str,
+        logger: logging.Logger,
     ):
         self.model = model
         self.tokenizer = tokenizer
         self.runtime = runtime
         self.device = device
+        self.logger = logger
 
-        self.logger = logging.getLogger("llama")
-        handler = logging.FileHandler("llama_llm_logs.json")
-        handler.setFormatter(JSONFormatter())
-        self.logger.addHandler(handler)
-        self.logger.addHandler(logging.StreamHandler(sys.stdout))
-        self.logger.setLevel(logging.INFO)
-
-        self.logger.info(
+        self.logger.debug(
             {
                 "device": self.device,
                 "runtime": self.runtime,
