@@ -147,11 +147,12 @@ If you don't know the answer to a question, please don't share false information
 
     # roll up the input/output things
     for dialog, result in zip(dialogs, results):
-        for msg in dialog:
+        for dialog_idx, msg in enumerate(dialog):
             gen_result = result.get("generation", {})
             logger.info(
                 {
                     "action": "chat_content",
+                    "dialog_idx": dialog_idx,
                     "request_role": msg.get("role"),
                     "request": msg.get("content"),
                     "dialog_id": msg.get("dialog_id", "<unknown id>"),
