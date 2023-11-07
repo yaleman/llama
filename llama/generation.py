@@ -575,7 +575,7 @@ class Llama:
             for t, unsafe in zip(generation_tokens, unsafe_requests)
         ]
 
-        self.logger.info(
+        self.logger.debug(
             {
                 "action": "chat_completion_end",
                 "completion_id": completion_id,

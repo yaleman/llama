@@ -104,18 +104,19 @@ If you don't know the answer to a question, please don't share false information
 
     for dialog, result in zip(dialogs, results):
         for msg in dialog:
+            generation_result = result.get("generation", {})
             logger.info(
                 {
                     "action": "chat_content",
                     "request_role": msg["role"],
                     "request": msg["content"],
-                    "response_role": result.get("generation", {}).get(
-                        "role", "<unset role>"
-                    ),
-                    "response": result.get("generation", {}).get(
+                    "response_role": generation_result.get("role", "<unset role>"),
+                    "response": generation_result.get(
                         "content", "<no content was returned>"
                     ),
-                    "completion_id": result.get("completion_id", "<unknown id>"),
+                    "completion_id": generation_result.get(
+                        "completion_id", "<unknown id>"
+                    ),
                 }
             )
         #     # print(f"{msg['role'].capitalize()}: {msg['content']}\n")
