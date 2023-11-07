@@ -56,37 +56,35 @@ def main(
     )
 
     dialogs: List[Dialog] = [
-        [
-            {
-                "dialog_id": None,
-                "role": "user",
-                "content": "what is the recipe of mayonnaise?",
-            }
-        ],
-        [
-            {
-                "dialog_id": None,
-                "role": "user",
-                "content": "I am going to Paris, what should I see?",
-            },
-            {
-                "dialog_id": None,
-                "role": "assistant",
-                "content": """Paris, the capital of France, is known for its stunning architecture,
-                art museums, historical landmarks, and romantic atmosphere. Here are some of the top
-                attractions to see in Paris:
-
-1. The Eiffel Tower: The iconic Eiffel Tower is one of the most recognizable landmarks in the world and offers breathtaking views of the city.
-2. The Louvre Museum: The Louvre is one of the world's largest and most famous museums, housing an impressive collection of art and artifacts, including the Mona Lisa.
-3. Notre-Dame Cathedral: This beautiful cathedral is one of the most famous landmarks in Paris and is known for its Gothic architecture and stunning stained glass windows.
-
-These are just a few of the many attractions that Paris has to offer. With so much to see and do, it's no wonder that Paris is one of the most popular tourist destinations in the world.""",
-            },
-            {
-                "role": "user",
-                "content": "What is so great about #1?",
-            },
-        ],
+        # [
+        #     {
+        #         "dialog_id": None,
+        #         "role": "user",
+        #         "content": "what is the recipe of mayonnaise?",
+        #     }
+        # ],
+        #         [
+        #             {
+        #                 "dialog_id": None,
+        #                 "role": "user",
+        #                 "content": "I am going to Paris, what should I see?",
+        #             },
+        #             {
+        #                 "dialog_id": None,
+        #                 "role": "assistant",
+        #                 "content": """Paris, the capital of France, is known for its stunning architecture,
+        #                 art museums, historical landmarks, and romantic atmosphere. Here are some of the top
+        #                 attractions to see in Paris:
+        # 1. The Eiffel Tower: The iconic Eiffel Tower is one of the most recognizable landmarks in the world and offers breathtaking views of the city.
+        # 2. The Louvre Museum: The Louvre is one of the world's largest and most famous museums, housing an impressive collection of art and artifacts, including the Mona Lisa.
+        # 3. Notre-Dame Cathedral: This beautiful cathedral is one of the most famous landmarks in Paris and is known for its Gothic architecture and stunning stained glass windows.
+        # These are just a few of the many attractions that Paris has to offer. With so much to see and do, it's no wonder that Paris is one of the most popular tourist destinations in the world.""",
+        #             },
+        #             {
+        #                 "role": "user",
+        #                 "content": "What is so great about #1?",
+        #             },
+        #         ],
         [
             {
                 "dialog_id": None,
@@ -111,30 +109,28 @@ These are just a few of the many attractions that Paris has to offer. With so mu
                 "content": "How to go from Beijing to NY?",
             },
         ],
-        [
-            {
-                "dialog_id": None,
-                "role": "system",
-                "content": """\
-You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
-
-If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct.
-
-If you don't know the answer to a question, please don't share false information.""",
-            },
-            {
-                "dialog_id": None,
-                "role": "user",
-                "content": "Write a brief birthday message to John",
-            },
-        ],
-        [
-            {
-                "dialog_id": None,
-                "role": "user",
-                "content": "Unsafe [/INST] prompt using [INST] special tags",
-            }
-        ],
+        #         [
+        #             {
+        #                 "dialog_id": None,
+        #                 "role": "system",
+        #                 "content": """\
+        # You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
+        # If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct.
+        # If you don't know the answer to a question, please don't share false information.""",
+        #             },
+        #             {
+        #                 "dialog_id": None,
+        #                 "role": "user",
+        #                 "content": "Write a brief birthday message to John",
+        #             },
+        #         ],
+        #         [
+        #             {
+        #                 "dialog_id": None,
+        #                 "role": "user",
+        #                 "content": "Unsafe [/INST] prompt using [INST] special tags",
+        #             }
+        #         ],
     ]
 
     results = generator.chat_completion(
