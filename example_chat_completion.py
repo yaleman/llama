@@ -4,7 +4,9 @@ chat completion creator
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 """
 
+from random import randint
 from typing import List, Optional
+import uuid
 
 import fire  # type: ignore
 
@@ -40,12 +42,17 @@ def main(
     """
     logger = setup_logging()
 
+    execution_id = uuid.uuid4().hex
+    random_seed = randint(0, 1000000)
+
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
         logger=logger,
+        seed=random_seed,
+        execution_id=execution_id,
     )
 
     dialogs: List[Dialog] = [
@@ -54,8 +61,9 @@ def main(
             {"role": "user", "content": "I am going to Paris, what should I see?"},
             {
                 "role": "assistant",
-                "content": """\
-Paris, the capital of France, is known for its stunning architecture, art museums, historical landmarks, and romantic atmosphere. Here are some of the top attractions to see in Paris:
+                "content": """Paris, the capital of France, is known for its stunning architecture,
+                art museums, historical landmarks, and romantic atmosphere. Here are some of the top
+                attractions to see in Paris:
 
 1. The Eiffel Tower: The iconic Eiffel Tower is one of the most recognizable landmarks in the world and offers breathtaking views of the city.
 2. The Louvre Museum: The Louvre is one of the world's largest and most famous museums, housing an impressive collection of art and artifacts, including the Mona Lisa.
@@ -95,28 +103,26 @@ If you don't know the answer to a question, please don't share false information
             }
         ],
     ]
+
     results = generator.chat_completion(
         dialogs,
         max_gen_len=max_gen_len,
         temperature=temperature,
         top_p=top_p,
+        execution_id=execution_id,
     )
 
     for dialog, result in zip(dialogs, results):
         for msg in dialog:
-            generation_result = result.get("generation", {})
+            gen_result = result.get("generation", {})
             logger.info(
                 {
                     "action": "chat_content",
                     "request_role": msg["role"],
                     "request": msg["content"],
-                    "response_role": generation_result.get("role", "<unset role>"),
-                    "response": generation_result.get(
-                        "content", "<no content was returned>"
-                    ),
-                    "completion_id": generation_result.get(
-                        "completion_id", "<unknown id>"
-                    ),
+                    "response_role": gen_result.get("role", "<unset role>"),
+                    "response": gen_result.get("content", "<no content was returned>"),
+                    "completion_id": gen_result.get("completion_id", "<unknown id>"),
                 }
             )
         #     # print(f"{msg['role'].capitalize()}: {msg['content']}\n")

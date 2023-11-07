@@ -3,20 +3,17 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
+import logging
 import os
-from logging import getLogger
 from typing import List
 
 from sentencepiece import SentencePieceProcessor  # type: ignore
 
 
-logger = getLogger()
-
-
 class Tokenizer:
     """tokenizing and encoding/decoding text using SentencePiece."""
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, logger: logging.Logger, execution_id: str):
         """
         Initializes the Tokenizer with a SentencePiece model.
 
@@ -25,17 +22,18 @@ class Tokenizer:
         """
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-
+        self.execution_id = execution_id
         self.sp_model = SentencePieceProcessor()
         self.sp_model.LoadFromFile(model_path)
-        logger.info("Reloaded SentencePiece model from %s", model_path)
+        self.logger = logger
+        self.logger.info("Reloaded SentencePiece model from %s", model_path)
 
         # BOS / EOS token IDs
         self.n_words: int = self.sp_model.vocab_size()
         self.bos_id: int = self.sp_model.bos_id()
         self.eos_id: int = self.sp_model.eos_id()
         self.pad_id: int = self.sp_model.pad_id()
-        logger.info(
+        self.logger.info(
             "#words: %s - BOS ID: %s - EOS ID: %s",
             self.n_words,
             self.bos_id,
@@ -43,7 +41,7 @@ class Tokenizer:
         )
         assert self.sp_model.vocab_size() == self.sp_model.GetPieceSize()
 
-    def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
+    def encode(self, input_string: str, bos: bool, eos: bool) -> List[int]:
         """
         Encodes a string into a list of token IDs.
 
@@ -55,8 +53,15 @@ class Tokenizer:
         Returns:
             List[int]: A list of token IDs.
         """
-        assert isinstance(s, str)
-        t: List[int] = self.sp_model.Encode(s)
+        self.logger.info(
+            {
+                "action": "encode",
+                "execution_id": self.execution_id,
+                "input": input_string,
+            }
+        )
+        assert isinstance(input_string, str)
+        t: List[int] = self.sp_model.Encode(input_string)
         if bos:
             t = [self.bos_id] + t
         if eos:
@@ -74,4 +79,12 @@ class Tokenizer:
             str: The decoded string.
         """
         res: str = self.sp_model.Decode(t)
+        self.logger.info(
+            {
+                "action": "decode",
+                "execution_id": self.execution_id,
+                "input": t,
+                "result": res,
+            }
+        )
         return res

@@ -7,6 +7,7 @@ import uuid
 import fire  # type: ignore
 
 from llama.generation import Llama
+from llama.logging import setup_logging
 
 
 def main(
@@ -33,11 +34,15 @@ def main(
         max_batch_size (int, optional): The maximum batch size for generating sequences. Defaults to 4.
     """
 
+    logger = setup_logging()
+    completion_id = uuid.uuid4().hex
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
+        execution_id=completion_id,
+        logger=logger,
     )
 
     prompts: List[str] = [
@@ -57,7 +62,6 @@ def main(
         plush girafe => girafe peluche
         cheese =>""",
     ]
-    completion_id = uuid.uuid4().hex
     results = generator.text_completion(
         prompts,
         max_gen_len=max_gen_len,

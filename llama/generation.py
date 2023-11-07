@@ -70,6 +70,7 @@ class Llama:
         tokenizer_path: str,
         max_seq_len: int,
         max_batch_size: int,
+        execution_id: str,
         logger: logging.Logger,
         model_parallel_size: Optional[int] = None,
         seed: int = 1,
@@ -98,7 +99,18 @@ class Llama:
             and loads the pre-trained model and tokenizer.
 
         """
-        logger.info({"message": "starting up!"})
+        logger.info(
+            {
+                "action": "start",
+                "model_dir": ckpt_dir,
+                "seed": seed,
+                "execution_id": execution_id,
+            }
+        )
+
+        # no point doing all the startup if we don't have checkpoint files
+        checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
+        assert len(checkpoints) > 0, f"no checkpoint (*.pth) files found in {ckpt_dir}"
 
         runtime = "gloo"
         try:
@@ -112,7 +124,9 @@ class Llama:
             try:
                 torch.distributed.init_process_group("gloo")
             except RuntimeError as runtime_error:
-                print(f"Can't use Gloo runtime, bailing! - error was {runtime_error}")
+                print(
+                    f"Can't use Gloo runtime, ran out of options to make runtime, have to quit! - error was {runtime_error}"
+                )
                 sys.exit(1)
 
         if not model_parallel_is_initialized():
@@ -126,16 +140,14 @@ class Llama:
 
         # seed must be the same in all processes
         torch.manual_seed(seed)
-
         # if local_rank > 0:
         #     sys.stdout = open(os.devnull, "w")
 
         start_time = time.time()
-        checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
-        assert len(checkpoints) > 0, f"no checkpoint files found in {ckpt_dir}"
         assert model_parallel_size == len(
             checkpoints
         ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {model_parallel_size}"
+
         ckpt_path = checkpoints[get_model_parallel_rank()]
         checkpoint = torch.load(ckpt_path, map_location="cpu")
         with open(Path(ckpt_dir) / "params.json", "r", encoding="utf-8") as f:
@@ -166,7 +178,11 @@ class Llama:
             max_batch_size=max_batch_size,
             **params,
         )
-        tokenizer = Tokenizer(model_path=tokenizer_path)
+        tokenizer = Tokenizer(
+            model_path=tokenizer_path,
+            logger=logger,
+            execution_id=execution_id,
+        )
         model_args.vocab_size = tokenizer.n_words
         if device == "cuda":
             # pylint: disable=E1101
@@ -174,7 +190,12 @@ class Llama:
 
         model = Transformer(model_args)
         model.load_state_dict(checkpoint, strict=False)
-        print(f"Loaded in {time.time() - start_time:.2f} seconds")
+        logger.info(
+            {
+                "action": "finished loading model",
+                "time_s": round(time.time() - start_time, 2),
+            }
+        )
 
         return Llama(model, tokenizer, runtime, device, logger)
 
@@ -440,6 +461,7 @@ class Llama:
     def chat_completion(
         self,
         dialogs: List[Dialog],
+        execution_id: str,
         temperature: float = 0.6,
         top_p: float = 0.9,
         max_gen_len: Optional[int] = None,
@@ -472,17 +494,15 @@ class Llama:
 
         # this keeps track of a single "completion" requerst
 
-        completion_id = uuid.uuid4().hex
-
         self.logger.info(
             {
                 "action": "completion_start",
-                "completion_id": completion_id,
+                "execution_id": execution_id,
                 "temperature": temperature,
                 "top_p": top_p,
                 "logprobs": logprobs,
                 "max_gen_len": max_gen_len,
-                "dialogs": dialogs,
+                "dialogs": len(dialogs),
             }
         )
 
@@ -490,6 +510,7 @@ class Llama:
             max_gen_len = self.model.params.max_seq_len - 1
         prompt_tokens = []
         unsafe_requests = []
+        completion_id = uuid.uuid4().hex
         for dialog in dialogs:
             unsafe_requests.append(
                 any(tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog)
@@ -515,6 +536,16 @@ class Llama:
                 "model only supports 'system', 'user' and 'assistant' roles, "
                 "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
             )
+
+            self.logger.info(
+                {
+                    "action": "dialog_input_set",
+                    "completion_id": completion_id,
+                    "execution_id": execution_id,
+                    "dialogs": dialog,
+                }
+            )
+
             dialog_tokens: List[int] = sum(
                 [
                     self.tokenizer.encode(
