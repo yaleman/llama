@@ -4,9 +4,9 @@
 
 from typing import List
 import uuid
-import fire
+import fire  # type: ignore
 
-from llama import Llama
+from llama.generation import Llama
 
 
 def main(
@@ -17,7 +17,7 @@ def main(
     max_seq_len: int = 128,
     max_gen_len: int = 64,
     max_batch_size: int = 4,
-):
+) -> None:
     """
     Entry point of the program for generating text using a pretrained model.
 

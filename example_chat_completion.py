@@ -6,9 +6,9 @@ chat completion creator
 
 from typing import List, Optional
 
-import fire
+import fire  # type: ignore
 
-from llama import Llama, Dialog
+from llama.generation import Llama, Dialog
 
 
 def main(
@@ -19,7 +19,7 @@ def main(
     max_seq_len: int = 512,
     max_batch_size: int = 8,
     max_gen_len: Optional[int] = None,
-):
+) -> None:
     """
     Entry point of the program for generating text using a pretrained model.
 
@@ -78,7 +78,9 @@ These are just a few of the many attractions that Paris has to offer. With so mu
                 "content": """\
 You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
 
-If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information.""",
+If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct.
+
+If you don't know the answer to a question, please don't share false information.""",
             },
             {"role": "user", "content": "Write a brief birthday message to John"},
         ],
@@ -90,7 +92,7 @@ If a question does not make any sense, or is not factually coherent, explain why
         ],
     ]
     results = generator.chat_completion(
-        dialogs,  # type: ignore
+        dialogs,
         max_gen_len=max_gen_len,
         temperature=temperature,
         top_p=top_p,

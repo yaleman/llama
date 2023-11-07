@@ -11,29 +11,45 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 import uuid
 
 import torch
 import torch.nn.functional as F
-from fairscale.nn.model_parallel.initialize import (
+from fairscale.nn.model_parallel.initialize import (  # type: ignore
     get_model_parallel_rank,
     initialize_model_parallel,
     model_parallel_is_initialized,
 )
-
 
 from llama.model import ModelArgs, Transformer
 from llama.tokenizer import Tokenizer
 
 
 class JSONFormatter(logging.Formatter):
-    """formats things for log purposes"""
+    """formats things for logging purposes"""
 
-    def format(self, record: logging.LogRecord):
+    def format(self, record: logging.LogRecord) -> str:
         """format the message"""
+
+        msg = record.getMessage()
+        try:
+            res: Dict[str, Any] = json.loads(msg)
+        except json.JSONDecodeError as error:
+            print(f"Welp, failed to JSON decode {msg}: {error}")
+            res = {"message": msg}
+
+        if isinstance(res, str):
+            res = {"message": res}
+        elif isinstance(res, list):
+            res = {"messages": res}
+
+        if not isinstance(res, dict):
+            res = {"message": res}
+        res["level"] = record.levelname
+
         return json.dumps(
-            {"level": record.levelname, "message": record.getMessage()},
+            res,
             default=str,
         )
 
@@ -158,15 +174,15 @@ class Llama:
             # apple silicon support
             if torch.backends.mps.is_available():
                 device = "mps"
-                torch.set_default_dtype(torch.float32)
+                torch.set_default_dtype(torch.float32)  # type: ignore
             else:
                 # don't have to set the default device here because the default is CPU
                 # https://pytorch.org/docs/stable/generated/torch.set_default_device.html#torch-set-default-device
 
                 device = "cpu"
                 # valid dtypes: https://pytorch.org/docs/stable/tensor_attributes.html#torch.dtype
-                torch.set_default_dtype(torch.float64)
-        torch.set_default_device(device)
+                torch.set_default_dtype(torch.float64)  # type: ignore
+        torch.set_default_device(device)  # type: ignore
 
         model_args: ModelArgs = ModelArgs(
             runtime=runtime,
@@ -302,8 +318,10 @@ class Llama:
             self.model.to(self.device)
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
-                probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
-                next_token = sample_top_p(probs, top_p)
+                # probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                next_token = sample_top_p(
+                    torch.softmax(logits[:, -1] / temperature, dim=-1), top_p
+                )
             else:
                 next_token = torch.argmax(logits[:, -1], dim=-1)
 
@@ -328,7 +346,7 @@ class Llama:
                 break
 
         if logprobs and token_logprobs is not None:
-            token_logprobs = token_logprobs.tolist()
+            token_logprobs = token_logprobs.tolist()  # type: ignore
         out_tokens, out_logprobs = [], []
         for i, toks in enumerate(tokens.tolist()):
             # cut to max gen len
@@ -356,7 +374,8 @@ class Llama:
 
         self.logger.info(log_result)
 
-        return (out_tokens, out_logprobs if logprobs else None)
+        # typing is hard I'll deal with this later  ... ugh?
+        return (out_tokens, out_logprobs if logprobs else None)  # type: ignore
 
     def text_completion(
         self,
@@ -425,7 +444,7 @@ class Llama:
             result = [
                 {
                     "generation": self.tokenizer.decode(t),
-                    "tokens": [self.tokenizer.decode(x) for x in t],
+                    "tokens": [self.tokenizer.decode([x]) for x in t],
                     "logprobs": logprobs_i,
                 }
                 for t, logprobs_i in zip(generation_tokens, generation_logprobs)  # type: ignore
@@ -478,11 +497,12 @@ class Llama:
         """
 
         # this keeps track of a single "completion" requerst
+
         completion_id = uuid.uuid4().hex
 
         self.logger.info(
             {
-                "action": "generate_start",
+                "action": "completion_start",
                 "completion_id": completion_id,
                 "temperature": temperature,
                 "top_p": top_p,
@@ -498,20 +518,25 @@ class Llama:
         unsafe_requests = []
         for dialog in dialogs:
             unsafe_requests.append(
-                any([tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog])
+                any(tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog)
             )
             if dialog[0]["role"] == "system":
-                dialog = [
+                dialog = [  # type: ignore
                     {
                         "role": dialog[1]["role"],
-                        "content": B_SYS
-                        + dialog[0]["content"]
-                        + E_SYS
-                        + dialog[1]["content"],
+                        # concat the content into a string
+                        "content": "".join(
+                            [
+                                B_SYS,
+                                dialog[0]["content"],
+                                E_SYS,
+                                dialog[1]["content"],
+                            ]
+                        ),
                     }
                 ] + dialog[2:]
-            assert all([msg["role"] == "user" for msg in dialog[::2]]) and all(
-                [msg["role"] == "assistant" for msg in dialog[1::2]]
+            assert all(msg["role"] == "user" for msg in dialog[::2]) and all(
+                msg["role"] == "assistant" for msg in dialog[1::2]
             ), (
                 "model only supports 'system', 'user' and 'assistant' roles, "
                 "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
@@ -557,7 +582,7 @@ class Llama:
                         if not unsafe
                         else UNSAFE_ERROR,
                     },
-                    "tokens": [self.tokenizer.decode(x) for x in t],
+                    "tokens": [self.tokenizer.decode([x]) for x in t],
                     "logprobs": logprobs_i,
                 }
                 for t, logprobs_i, unsafe in zip(
@@ -574,18 +599,18 @@ class Llama:
             for t, unsafe in zip(generation_tokens, unsafe_requests)
         ]
 
-        self.logger.info(
-            {
-                "action": "chat_completion_end",
-                "completion_id": completion_id,
-                "result": result,
-            },
-        )
+        # self.logger.info(
+        #     {
+        #         "action": "chat_completion_end",
+        #         "completion_id": completion_id,
+        #         "result": result,
+        #     },
+        # )
 
         return result  # type: ignore
 
 
-def sample_top_p(probs, p):
+def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
     """
     Perform top-p (nucleus) sampling on a probability distribution.
 

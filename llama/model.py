@@ -6,10 +6,10 @@ import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-import fairscale.nn.model_parallel.initialize as fs_init
+import fairscale.nn.model_parallel.initialize as fs_init  # type: ignore
 import torch
 import torch.nn.functional as F
-from fairscale.nn.model_parallel.layers import (
+from fairscale.nn.model_parallel.layers import (  # type: ignore
     ColumnParallelLinear,
     ParallelEmbedding,
     RowParallelLinear,
@@ -39,7 +39,7 @@ class ModelArgs:
 class RMSNorm(torch.nn.Module):
     """something?"""
 
-    def __init__(self, dim: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6) -> None:
         """
         Initialize the RMSNorm normalization layer.
 
@@ -56,7 +56,7 @@ class RMSNorm(torch.nn.Module):
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
 
-    def _norm(self, x):
+    def _norm(self, x: torch.Tensor) -> torch.Tensor:
         """
         Apply the RMSNorm normalization to the input tensor.
 
@@ -67,9 +67,10 @@ class RMSNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
 
         """
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        res: torch.Tensor = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        return res
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the RMSNorm layer.
 
@@ -84,7 +85,7 @@ class RMSNorm(torch.nn.Module):
         return output * self.weight
 
 
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     """
     Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
 
@@ -105,13 +106,13 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
     """
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
+    t = torch.arange(end, device=freqs.device)
+    freqs = torch.outer(t, freqs).float()
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
     return freqs_cis
 
 
-def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Reshape frequency tensor for broadcasting it with another tensor.
 
@@ -186,7 +187,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
 class Attention(nn.Module):
     """Multi-head attention module."""
 
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args: ModelArgs) -> None:
         """
         Initialize the Attention module.
 
@@ -289,7 +290,7 @@ class Attention(nn.Module):
         start_pos: int,
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
-    ):
+    ) -> torch.Tensor:
         """
         Forward pass of the attention module.
 
@@ -337,7 +338,8 @@ class Attention(nn.Module):
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         output = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
-        return self.wo(output)
+        res: torch.Tensor = self.wo(output)
+        return res
 
 
 class FeedForward(nn.Module):
@@ -382,9 +384,10 @@ class FeedForward(nn.Module):
             dim, hidden_dim, bias=False, gather_output=False, init_method=lambda x: x
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """forward embedding"""
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+        res: torch.Tensor = self.w2(F.silu(self.w1(x)) * self.w3(x))
+        return res
 
 
 class TransformerBlock(nn.Module):
@@ -430,7 +433,7 @@ class TransformerBlock(nn.Module):
         start_pos: int,
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
-    ):
+    ) -> torch.Tensor:
         """
         Perform a forward pass through the TransformerBlock.
 
@@ -499,7 +502,7 @@ class Transformer(nn.Module):
         )
 
     @torch.inference_mode()
-    def forward(self, tokens: torch.Tensor, start_pos: int):
+    def forward(self, tokens: torch.Tensor, start_pos: int) -> torch.Tensor:
         """
         Perform a forward pass through the Transformer model.
 
@@ -527,5 +530,5 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
         h = self.norm(h)
-        output = self.output(h).float()
+        output: torch.Tensor = self.output(h).float()
         return output

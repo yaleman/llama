@@ -7,7 +7,7 @@ import os
 from logging import getLogger
 from typing import List
 
-from sentencepiece import SentencePieceProcessor
+from sentencepiece import SentencePieceProcessor  # type: ignore
 
 
 logger = getLogger()
@@ -25,8 +25,9 @@ class Tokenizer:
         """
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        # pylint: disable=unexpected-keyword-arg
-        self.sp_model = SentencePieceProcessor(model_file=model_path)  # type: ignore
+
+        self.sp_model = SentencePieceProcessor()
+        self.sp_model.LoadFromFile(model_path)
         logger.info("Reloaded SentencePiece model from %s", model_path)
 
         # BOS / EOS token IDs
@@ -55,7 +56,7 @@ class Tokenizer:
             List[int]: A list of token IDs.
         """
         assert isinstance(s, str)
-        t = self.sp_model.Encode(s)
+        t: List[int] = self.sp_model.Encode(s)
         if bos:
             t = [self.bos_id] + t
         if eos:
@@ -72,4 +73,5 @@ class Tokenizer:
         Returns:
             str: The decoded string.
         """
-        return self.sp_model.Decode(t)
+        res: str = self.sp_model.Decode(t)
+        return res
