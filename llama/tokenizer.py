@@ -34,10 +34,11 @@ class Tokenizer:
         self.eos_id: int = self.sp_model.eos_id()
         self.pad_id: int = self.sp_model.pad_id()
         self.logger.info(
-            "#words: %s - BOS ID: %s - EOS ID: %s",
-            self.n_words,
-            self.bos_id,
-            self.eos_id,
+            {
+                "words": self.n_words,
+                "bos_id": self.bos_id,
+                "eos_id": self.eos_id,
+            }
         )
         assert self.sp_model.vocab_size() == self.sp_model.GetPieceSize()
 
@@ -78,7 +79,9 @@ class Tokenizer:
         Returns:
             str: The decoded string.
         """
-        res: str = self.sp_model.Decode(t)
+
+        # only send it as a list if it's not a single item
+        res: str = self.sp_model.Decode(t if len(t) > 1 else t[0])
         self.logger.info(
             {
                 "action": "decode",
