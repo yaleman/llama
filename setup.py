@@ -1,3 +1,5 @@
+""" setup things """
+
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
@@ -5,7 +7,8 @@ from setuptools import find_packages, setup
 
 
 def get_requirements(path: str):
-    return [l.strip() for l in open(path)]
+    """get package reruirements"""
+    return [line.strip() for line in open(path, "r", encoding="utf-8")]
 
 
 setup(
