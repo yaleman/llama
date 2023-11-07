@@ -28,9 +28,10 @@ from llama.tokenizer import Tokenizer
 Role = Literal["system", "user", "assistant"]
 
 
-class Message(TypedDict):
+class Message(TypedDict, total=False):
     """message in a dialog"""
 
+    dialog_id: Optional[str]
     role: Role
     content: str
 
@@ -510,37 +511,49 @@ class Llama:
             max_gen_len = self.model.params.max_seq_len - 1
         prompt_tokens = []
         unsafe_requests = []
-        completion_id = uuid.uuid4().hex
         for dialog in dialogs:
+            dialog_id = uuid.uuid4().hex
             unsafe_requests.append(
-                any(tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog)
+                any(
+                    tag in msg.get("content", "")
+                    for tag in SPECIAL_TAGS
+                    for msg in dialog
+                )
             )
-            if dialog[0]["role"] == "system":
+            if dialog[0].get("role", "") == "system":
                 dialog = [  # type: ignore
                     {
-                        "role": dialog[1]["role"],
+                        "dialog_id": dialog_id,
+                        "role": dialog[1].get("role"),
                         # concat the content into a string
                         "content": "".join(
                             [
                                 B_SYS,
-                                dialog[0]["content"],
+                                dialog[0].get("content", ""),
                                 E_SYS,
-                                dialog[1]["content"],
+                                dialog[1].get("content", ""),
                             ]
                         ),
                     }
-                ] + dialog[2:]
-            assert all(msg["role"] == "user" for msg in dialog[::2]) and all(
-                msg["role"] == "assistant" for msg in dialog[1::2]
+                ]  # + dialog[2:]
+
+                for dialog_sub in dialog[2::]:
+                    dialog_sub["id"] = dialog_id
+                    dialog.append(dialog_sub)
+            assert all(msg.get("role", "") == "user" for msg in dialog[::2]) and all(
+                msg.get("role", "") == "assistant" for msg in dialog[1::2]
             ), (
                 "model only supports 'system', 'user' and 'assistant' roles, "
                 "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
             )
 
+            for dialog_sub in dialog:
+                dialog_sub["dialog_id"] = dialog_id
+
             self.logger.info(
                 {
                     "action": "dialog_input_set",
-                    "completion_id": completion_id,
+                    "dialog_id": dialog_id,
                     "execution_id": execution_id,
                     "dialogs": dialog,
                 }
@@ -549,7 +562,7 @@ class Llama:
             dialog_tokens: List[int] = sum(
                 [
                     self.tokenizer.encode(
-                        f"{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} ",
+                        f"{B_INST} {(prompt.get('content', '')).strip()} {E_INST} {(answer.get('content','')).strip()} ",
                         bos=True,
                         eos=True,
                     )
@@ -561,10 +574,10 @@ class Llama:
                 [],
             )
             assert (
-                dialog[-1]["role"] == "user"
-            ), f"Last message must be from user, got {dialog[-1]['role']}"
+                dialog[-1].get("role", "") == "user"
+            ), f"Last message must be from user, got {dialog[-1].get('role', '')}"
             dialog_tokens += self.tokenizer.encode(
-                f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}",
+                f"{B_INST} {(dialog[-1].get('content', '')).strip()} {E_INST}",
                 bos=True,
                 eos=False,
             )
@@ -576,7 +589,7 @@ class Llama:
             temperature=temperature,
             top_p=top_p,
             logprobs=logprobs,
-            completion_id=completion_id,
+            completion_id=execution_id,
         )
         if logprobs:
             result = [
@@ -589,7 +602,7 @@ class Llama:
                     },
                     "tokens": [self.tokenizer.decode([x]) for x in t],
                     "logprobs": logprobs_i,
-                    "completion_id": completion_id,
+                    "execution_id": execution_id,
                 }
                 for t, logprobs_i, unsafe in zip(
                     generation_tokens, generation_logprobs, unsafe_requests  # type: ignore
@@ -600,7 +613,7 @@ class Llama:
                 "generation": {
                     "role": "assistant",
                     "content": self.tokenizer.decode(t) if not unsafe else UNSAFE_ERROR,
-                    "completion_id": completion_id,
+                    "execution_id": execution_id,
                 }
             }
             for t, unsafe in zip(generation_tokens, unsafe_requests)
@@ -609,7 +622,7 @@ class Llama:
         self.logger.debug(
             {
                 "action": "chat_completion_end",
-                "completion_id": completion_id,
+                "completion_id": execution_id,
                 "result": result,
             },
         )

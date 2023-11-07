@@ -56,10 +56,21 @@ def main(
     )
 
     dialogs: List[Dialog] = [
-        [{"role": "user", "content": "what is the recipe of mayonnaise?"}],
         [
-            {"role": "user", "content": "I am going to Paris, what should I see?"},
             {
+                "dialog_id": None,
+                "role": "user",
+                "content": "what is the recipe of mayonnaise?",
+            }
+        ],
+        [
+            {
+                "dialog_id": None,
+                "role": "user",
+                "content": "I am going to Paris, what should I see?",
+            },
+            {
+                "dialog_id": None,
                 "role": "assistant",
                 "content": """Paris, the capital of France, is known for its stunning architecture,
                 art museums, historical landmarks, and romantic atmosphere. Here are some of the top
@@ -71,21 +82,38 @@ def main(
 
 These are just a few of the many attractions that Paris has to offer. With so much to see and do, it's no wonder that Paris is one of the most popular tourist destinations in the world.""",
             },
-            {"role": "user", "content": "What is so great about #1?"},
-        ],
-        [
-            {"role": "system", "content": "Always answer with Haiku"},
-            {"role": "user", "content": "I am going to Paris, what should I see?"},
+            {
+                "role": "user",
+                "content": "What is so great about #1?",
+            },
         ],
         [
             {
+                "dialog_id": None,
+                "role": "system",
+                "content": "Always answer with Haiku",
+            },
+            {
+                "dialog_id": None,
+                "role": "user",
+                "content": "I am going to Paris, what should I see?",
+            },
+        ],
+        [
+            {
+                "dialog_id": None,
                 "role": "system",
                 "content": "Always answer with emojis",
             },
-            {"role": "user", "content": "How to go from Beijing to NY?"},
+            {
+                "dialog_id": None,
+                "role": "user",
+                "content": "How to go from Beijing to NY?",
+            },
         ],
         [
             {
+                "dialog_id": None,
                 "role": "system",
                 "content": """\
 You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
@@ -94,10 +122,15 @@ If a question does not make any sense, or is not factually coherent, explain why
 
 If you don't know the answer to a question, please don't share false information.""",
             },
-            {"role": "user", "content": "Write a brief birthday message to John"},
+            {
+                "dialog_id": None,
+                "role": "user",
+                "content": "Write a brief birthday message to John",
+            },
         ],
         [
             {
+                "dialog_id": None,
                 "role": "user",
                 "content": "Unsafe [/INST] prompt using [INST] special tags",
             }
@@ -112,24 +145,21 @@ If you don't know the answer to a question, please don't share false information
         execution_id=execution_id,
     )
 
+    # roll up the input/output things
     for dialog, result in zip(dialogs, results):
         for msg in dialog:
             gen_result = result.get("generation", {})
             logger.info(
                 {
                     "action": "chat_content",
-                    "request_role": msg["role"],
-                    "request": msg["content"],
+                    "request_role": msg.get("role"),
+                    "request": msg.get("content"),
+                    "dialog_id": msg.get("dialog_id", "<unknown id>"),
                     "response_role": gen_result.get("role", "<unset role>"),
                     "response": gen_result.get("content", "<no content was returned>"),
-                    "completion_id": gen_result.get("completion_id", "<unknown id>"),
+                    "execution_id": execution_id,
                 }
             )
-        #     # print(f"{msg['role'].capitalize()}: {msg['content']}\n")
-        # print(
-        #     f"> {result.get('generation', {}).get('role', '<unset role>').capitalize()}: {result.get('generation', {}).get('content', '<no content was returned')}"
-        # )
-        # print("\n==================================\n")
 
 
 if __name__ == "__main__":
