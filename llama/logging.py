@@ -1,5 +1,6 @@
 """ log handler things """
 
+from datetime import datetime
 import json
 import logging
 import sys
@@ -28,11 +29,8 @@ class JSONFormatter(logging.Formatter):
                 res = {"message": msg}
 
         res["level"] = record.levelname
-
-        return json.dumps(
-            res,
-            default=str,
-        )
+        res["_time"] = datetime.utcnow().isoformat()
+        return json.dumps(res, default=str, sort_keys=True, ensure_ascii=False)
 
 
 def setup_logging() -> logging.Logger:
