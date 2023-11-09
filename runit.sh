@@ -29,8 +29,15 @@ echo "Using model ${MODEL_DIR} (set with MODEL_DIR env var)"
 echo "Using max_batch_size=${MAX_BATCH_SIZE} (set with MAX_BATCH_SIZE env var)"
 echo "Using max_seq_len=${MAX_SEQ_LEN} (set with MAX_SEQ_LEN env var)"
 
+if [ -n "$1" ]; then
+    DIALOG_FILE=" --dialog-filename $1"
+else
+    DIALOG_FILE=""
+fi
+
+# shellcheck disable=SC2086
 torchrun --nproc_per_node "${NPROC_PER_NODE}" \
-    example_chat_completion.py \
+    example_chat_completion.py $DIALOG_FILE \
     --ckpt_dir "${MODEL_DIR}" \
     --tokenizer_path tokenizer.model \
     --max_seq_len "${MAX_SEQ_LEN}" \

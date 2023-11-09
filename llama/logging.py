@@ -19,7 +19,7 @@ class JSONFormatter(logging.Formatter):
         else:
             if isinstance(msg, str):
                 try:
-                    res: Dict[str, Any] = json.loads(msg)
+                    res = json.loads(msg)
                 except json.JSONDecodeError as error:
                     print(f"Welp, failed to JSON decode {msg}: {error}")
                     res = {"message": msg}

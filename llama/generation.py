@@ -116,6 +116,7 @@ class Llama:
         runtime = "gloo"
         try:
             if not torch.distributed.is_initialized():
+                # try starting up CUDA first
                 torch.distributed.init_process_group("nccl")
                 runtime = "nccl"
                 torch.cuda.empty_cache()
@@ -126,7 +127,7 @@ class Llama:
                 torch.distributed.init_process_group("gloo")
             except RuntimeError as runtime_error:
                 print(
-                    f"Can't use Gloo runtime, ran out of options to make runtime, have to quit! - error was {runtime_error}"
+                    f"Can't use Gloo runtime, ran out of runtimes to try, have to quit! - error was {runtime_error}"
                 )
                 sys.exit(1)
 
@@ -151,8 +152,10 @@ class Llama:
 
         ckpt_path = checkpoints[get_model_parallel_rank()]
         checkpoint = torch.load(ckpt_path, map_location="cpu")
-        with open(Path(ckpt_dir) / "params.json", "r", encoding="utf-8") as f:
-            params = json.loads(f.read())
+        with open(
+            Path(ckpt_dir) / "params.json", "r", encoding="utf-8"
+        ) as checkpoint_file_handle:
+            params = json.loads(checkpoint_file_handle.read())
 
         if runtime == "nccl":
             device = "cuda"
@@ -160,16 +163,16 @@ class Llama:
             # https://pytorch.org/docs/stable/tensors.html
             # torch.set_default_tensor_type(torch.DoubleTensor)
             # apple silicon support
+            # torch.set_default_dtype(torch.float32)  # type: ignore
             if torch.backends.mps.is_available():
                 device = "mps"
-                torch.set_default_dtype(torch.float32)  # type: ignore
             else:
                 # don't have to set the default device here because the default is CPU
                 # https://pytorch.org/docs/stable/generated/torch.set_default_device.html#torch-set-default-device
 
                 device = "cpu"
                 # valid dtypes: https://pytorch.org/docs/stable/tensor_attributes.html#torch.dtype
-                torch.set_default_dtype(torch.float64)  # type: ignore
+                # torch.set_default_dtype(torch.float64)  # type: ignore
         torch.set_default_device(device)  # type: ignore
 
         model_args: ModelArgs = ModelArgs(
@@ -268,7 +271,7 @@ class Llama:
                 "top_p": top_p,
                 "logprobs": logprobs,
                 "max_gen_len": max_gen_len,
-                # "prompt_tokens": prompt_tokens,
+                # "prompt_tokens": prompt_tokens, # these are just a bit list of ints, so not much help logging it
             }
         )
 
@@ -366,13 +369,14 @@ class Llama:
             # "out_tokens": out_tokens,
         }
         if logprobs:
-            log_result["out_logprobs"] = out_logprobs  # type: ignore
+            log_result["out_logprobs"] = out_logprobs
 
         self.logger.debug(log_result)
 
         # typing is hard I'll deal with this later  ... ugh?
         return (out_tokens, out_logprobs if logprobs else None)  # type: ignore
 
+    # pylint: disable=too-many-arguments
     def text_completion(
         self,
         prompts: List[str],
@@ -459,6 +463,7 @@ class Llama:
         )
         return result  # type: ignore
 
+    # pylint: disable=too-many-locals
     def chat_completion(
         self,
         dialogs: List[Dialog],
@@ -521,11 +526,12 @@ class Llama:
                 )
             )
             if dialog[0].get("role", "") == "system":
-                dialog = [  # type: ignore
+                dialog = [
                     {
                         "dialog_id": dialog_id,
-                        "role": dialog[1].get("role"),
-                        # concat the content into a string
+                        "role": dialog[1].get("role"),  # type: ignore
+                        # concat the content into a string, wrap the system message in the
+                        # system tags, then add the user message onto it
                         "content": "".join(
                             [
                                 B_SYS,
@@ -535,10 +541,10 @@ class Llama:
                             ]
                         ),
                     }
-                ]  # + dialog[2:]
-
+                ]
+                # append the rest of the dialog onto the end of it
                 for dialog_sub in dialog[2::]:
-                    dialog_sub["id"] = dialog_id
+                    dialog_sub["dialog_id"] = dialog_id
                     dialog.append(dialog_sub)
             assert all(msg.get("role", "") == "user" for msg in dialog[::2]) and all(
                 msg.get("role", "") == "assistant" for msg in dialog[1::2]
@@ -591,6 +597,7 @@ class Llama:
             logprobs=logprobs,
             completion_id=execution_id,
         )
+
         if logprobs:
             result = [
                 {
@@ -608,16 +615,19 @@ class Llama:
                     generation_tokens, generation_logprobs, unsafe_requests  # type: ignore
                 )
             ]
-        result = [
-            {
-                "generation": {
-                    "role": "assistant",
-                    "content": self.tokenizer.decode(t) if not unsafe else UNSAFE_ERROR,
-                    "execution_id": execution_id,
+        else:
+            result = [
+                {
+                    "generation": {
+                        "role": "assistant",
+                        "content": self.tokenizer.decode(t)
+                        if not unsafe
+                        else UNSAFE_ERROR,
+                        "execution_id": execution_id,
+                    }
                 }
-            }
-            for t, unsafe in zip(generation_tokens, unsafe_requests)
-        ]
+                for t, unsafe in zip(generation_tokens, unsafe_requests)
+            ]
 
         self.logger.debug(
             {

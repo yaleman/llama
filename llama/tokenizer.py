@@ -26,7 +26,12 @@ class Tokenizer:
         self.sp_model = SentencePieceProcessor()
         self.sp_model.LoadFromFile(model_path)
         self.logger = logger
-        self.logger.info("Reloaded SentencePiece model from %s", model_path)
+        self.logger.info(
+            {
+                "action": "reloaded sentencepiece model",
+                "filename": model_path,
+            }
+        )
 
         # BOS / EOS token IDs
         self.n_words: int = self.sp_model.vocab_size()
