@@ -162,3 +162,4 @@ llama_llm_logs.json
 tokenizer_checklist.chk
 tokenizer.model
 llama-*/
+llama_steve.json
