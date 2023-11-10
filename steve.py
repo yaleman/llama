@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from random import randint
 import sys
-from typing import List, Literal, TypedDict, Union
+from typing import List, Literal, Optional, TypedDict, Union
 from uuid import uuid4
 import click
 import questionary
@@ -91,17 +91,17 @@ class Steve:
             }
         )
 
-    def ask_for_input(self) -> None:
+    def ask_for_input(self) -> Optional[Message]:
         """asks a user for input"""
         user_input = questionary.text("What do you want to say?", multiline=True).ask()
 
         if user_input is None:
             self.logger.info(
                 {
-                    "message": "Got strange input, shutting down",
+                    "message": "Got strange input, skipping it.",
                 }
             )
-            sys.exit(0)
+            return None
         self.show_message(user_input, role="user")
         user_message: Message = {
             "role": "user",
@@ -109,9 +109,11 @@ class Steve:
             "dialog_id": self.session_id,
         }
         self.message_history.append(user_message)
+        return user_message
 
-    def get_response(self) -> None:
+    def get_response(self) -> Optional[Message]:
         """get the chat response from the model"""
+        print("Generating response...")
         try:
             response: List[ChatPrediction] = self.llama.chat_completion(
                 [self.message_history],
@@ -126,7 +128,7 @@ class Steve:
                     "session_id": self.session_id,
                 }
             )
-            return
+            return None
 
         if len(response) > 1:
             self.show_message(
@@ -148,11 +150,12 @@ class Steve:
                 "There was no message in the response, this is a system error and I must shut down now!",
                 role="error",
             )
-            sys.exit(1)
+            return None
         else:
             response_message = this_response["generation"]
             self.message_history.append(response_message)
             self.show_message(response_message)
+            return response_message
 
 
 def question_loop(config: Config, logger: logging.Logger) -> None:
@@ -168,17 +171,20 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
     steve = Steve(user_name, config, logger)
 
     while True:
-        steve.ask_for_input()
-        try:
-            steve.get_response()
-        except PromptTooLongError as error:
-            logger.error(
-                {
-                    "message": "Prompt too long, can't deal with this!",
-                    "error": str(error),
-                    "session_id": steve.session_id,
-                }
-            )
+        if steve.ask_for_input() is not None:
+            try:
+                response = steve.get_response()
+                if response is None:
+                    break
+            except PromptTooLongError as error:
+                logger.error(
+                    {
+                        "message": "Prompt too long, can't deal with this!",
+                        "error": str(error),
+                        "session_id": steve.session_id,
+                    }
+                )
+                break
 
 
 @click.command()
