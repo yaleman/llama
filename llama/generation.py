@@ -28,6 +28,10 @@ from llama.tokenizer import Tokenizer
 Role = Literal["system", "user", "assistant"]
 
 
+class PromptTooLongError(Exception):
+    """when your prompt's too long for us to deal with"""
+
+
 class Message(TypedDict, total=False):
     """message in a dialog"""
 
@@ -290,12 +294,8 @@ class Llama:
         min_prompt_len = min(len(t) for t in prompt_tokens)
         max_prompt_len = max(len(t) for t in prompt_tokens)
         if not max_prompt_len <= params.max_seq_len:
-            self.logger.error(
-                "Prompt length %s is longer than max_seq_len parameter %s",
-                max_prompt_len,
-                params.max_seq_len,
-            )
-            sys.exit(1)
+            msg = f"Prompt length {max_prompt_len} is longer than max_seq_len parameter {params.max_seq_len}"
+            raise PromptTooLongError(msg)
         total_len = min(params.max_seq_len, max_gen_len + max_prompt_len)
 
         pad_id = self.tokenizer.pad_id

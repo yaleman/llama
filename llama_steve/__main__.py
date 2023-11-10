@@ -9,8 +9,9 @@ from uuid import uuid4
 import click
 import questionary
 from llama.generation import ChatPrediction, Dialog, Llama, Message
+from llama.generation import PromptTooLongError
 
-from llama_steve import setup_logging
+from . import setup_logging
 
 
 class Config(TypedDict):
@@ -153,7 +154,16 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
 
     while True:
         steve.ask_for_input()
-        steve.get_response()
+        try:
+            steve.get_response()
+        except PromptTooLongError as error:
+            logger.error(
+                {
+                    "message": "Prompt too long, can't deal with this!",
+                    "error": str(error),
+                    "session_id": steve.session_id,
+                }
+            )
 
 
 @click.command()

@@ -14,6 +14,7 @@ import uuid
 import fire  # type: ignore
 
 from llama.generation import Llama, Dialog
+from llama.generation import PromptTooLongError
 from llama.logging import setup_logging
 
 
@@ -130,13 +131,23 @@ def main(
         execution_id=execution_id,
     )
 
-    results = generator.chat_completion(
-        dialogs,
-        max_gen_len=max_gen_len,
-        temperature=temperature,
-        top_p=top_p,
-        execution_id=execution_id,
-    )
+    try:
+        results = generator.chat_completion(
+            dialogs,
+            max_gen_len=max_gen_len,
+            temperature=temperature,
+            top_p=top_p,
+            execution_id=execution_id,
+        )
+    except PromptTooLongError as error:
+        logger.error(
+            {
+                "message": "prompt too long",
+                "error": str(error),
+                "execution_id": execution_id,
+            }
+        )
+        return
 
     # roll up the input/output things
     for dialog, result in zip(dialogs, results):

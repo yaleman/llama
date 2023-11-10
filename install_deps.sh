@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ -d ".venv" ]; then
     rm -rf .venv
 fi

@@ -1,0 +1,4 @@
+
+[tool.setuptools]
+packages = ["llama", "llama_steve"]
+find = {namespaces = false}
