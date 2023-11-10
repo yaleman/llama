@@ -12,4 +12,4 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-torchrun --nproc_per_node 1 llama_steve
+torchrun --nproc_per_node 1 steve.py
