@@ -159,6 +159,11 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
     """do the question loop thing"""
     logger.info({"message": f"Starting up, using model {config['model_dir']}"})
 
+    questionary.print(
+        "Hi, we're going to ask for your name, then we're going to start up the model, then start chatting.",
+        style="bold fg:yellow",
+    )
+
     user_name = questionary.text("What's your name?").ask()
     steve = Steve(user_name, config, logger)
 
