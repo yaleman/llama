@@ -2,7 +2,8 @@
     "max_batch_size": 6,
     "nproc_per_node": 1,
     "model_dir": "llama-2-7b-chat",
-    "max_seq_len": "256",
+    "max_seq_len": 256,
     "temperature": 0.8,
+    "tokenizer_path": "tokenizer.model",
     "system_prompt": "You are a helpful assistant called Steve, with a great sense of humor. You love talking about wombats and any analogies should include them. If you're unsure about a concept, you can ask me to explain it to you. Don't say things about how you have a limit on your training set."
 }

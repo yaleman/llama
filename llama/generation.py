@@ -122,12 +122,20 @@ class Llama:
                 torch.cuda.empty_cache()
 
         except RuntimeError as error:
-            print(f"Can't use NCCL (Nvidia CUDA), trying Gloo - error was {error}")
+            logger.debug(
+                {
+                    "message": "Can't use NCCL (Nvidia CUDA), trying Gloo",
+                    "error": error,
+                }
+            )
             try:
                 torch.distributed.init_process_group("gloo")
             except RuntimeError as runtime_error:
-                print(
-                    f"Can't use Gloo runtime, ran out of runtimes to try, have to quit! - error was {runtime_error}"
+                logger.error(
+                    {
+                        "error": runtime_error,
+                        "message": "Can't use Gloo runtime, ran out of runtimes to try, have to quit!",
+                    }
                 )
                 sys.exit(1)
 

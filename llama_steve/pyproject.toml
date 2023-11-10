@@ -1,0 +1,6 @@
+[project]
+name = "llama_steve"
+version = "0.0.1"
+dependencies = [
+    "questionary",
+]

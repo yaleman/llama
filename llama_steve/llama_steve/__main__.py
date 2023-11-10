@@ -10,7 +10,8 @@ import click
 import questionary
 from llama.generation import ChatPrediction, Dialog, Llama, Message
 
-from llama_steve import setup_logging
+# pylint: disable=import-error
+from llama_steve import setup_logging  # type: ignore
 
 
 class Config(TypedDict):
@@ -74,10 +75,11 @@ class Steve:
             prefix = "ERROR: "
         else:
             prefix = f"{role}: "
-        if isinstance(message, Message):
+        if isinstance(message, dict):
             role = message.get("role", role)
             message = message.get("content", "").strip()
-
+        if message.strip() == "":
+            message = "<empty message>"
         print(f"{prefix}{message}")
 
         self.logger.info(
