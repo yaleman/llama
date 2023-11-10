@@ -10,8 +10,7 @@ import click
 import questionary
 from llama.generation import ChatPrediction, Dialog, Llama, Message
 
-# pylint: disable=import-error
-from llama_steve import setup_logging  # type: ignore
+from llama_steve import setup_logging
 
 
 class Config(TypedDict):
@@ -32,7 +31,7 @@ def load_config(filepath: Path) -> Config:
     return res
 
 
-def save_config(config: Config, filepath: Path):
+def save_config(config: Config, filepath: Path) -> None:
     """save to a path"""
     with filepath.open("w", encoding="utf-8") as fh:
         json.dump(config, fh)
@@ -94,6 +93,14 @@ class Steve:
     def ask_for_input(self) -> None:
         """asks a user for input"""
         user_input = questionary.text("What do you want to say?", multiline=True).ask()
+
+        if user_input is None:
+            self.logger.info(
+                {
+                    "message": "Got strange input, shutting down",
+                }
+            )
+            sys.exit(0)
         self.show_message(user_input, role="user")
         user_message: Message = {
             "role": "user",
@@ -102,7 +109,7 @@ class Steve:
         }
         self.message_history.append(user_message)
 
-    def get_response(self):
+    def get_response(self) -> None:
         """get the chat response from the model"""
         response: List[ChatPrediction] = self.llama.chat_completion(
             [self.message_history],
@@ -139,19 +146,19 @@ class Steve:
 
 def question_loop(config: Config, logger: logging.Logger) -> None:
     """do the question loop thing"""
-    logger.info({"message": f"Uh, hi there, you're using model {config['model_dir']}"})
+    logger.info({"message": f"Starting up, using model {config['model_dir']}"})
 
     user_name = questionary.text("What's your name?").ask()
-
     steve = Steve(user_name, config, logger)
 
-    # while True:
-    steve.ask_for_input()
+    while True:
+        steve.ask_for_input()
+        steve.get_response()
 
 
 @click.command()
 @click.option("-c", "--config", "config_filepath", type=click.Path(exists=True))
-def main(config_filepath: str = "./llama_steve_config.json"):
+def main(config_filepath: str = "./llama_steve_config.json") -> None:
     """CLI for talking to Steve"""
     if config_filepath is None:
         config_filepath = "./llama_steve_config.json"

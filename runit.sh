@@ -6,13 +6,11 @@ if [ ! -d ".venv" ]; then
     echo "############################################"
     echo "Creating virtualenv and installing packages"
     echo "############################################"
-    python -m venv .venv
-    # shellcheck disable=SC1091
-    source .venv/bin/activate
-    pip install -e ./llama_steve
-    pip install -e ./llama
-
+    ./install_deps.sh
 fi
+# shellcheck disable=SC1091
+source .venv/bin/activate
+
 
 # --nproc_per_node NPROC_PER_NODE
 #   Number of workers per node; supported values: [auto, cpu, gpu, int].
