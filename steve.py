@@ -3,11 +3,11 @@ import json
 import logging
 from pathlib import Path
 from random import randint
-import sys
 from typing import List, Literal, Optional, TypedDict, Union
 from uuid import uuid4
 import click
 import questionary
+import torch.cuda
 from llama.generation import ChatPrediction, Dialog, DialogOrderError, Llama, Message
 from llama.generation import PromptTooLongError
 
@@ -168,8 +168,21 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
     )
 
     user_name = questionary.text("What's your name?").ask()
-    steve = Steve(user_name, config, logger)
 
+    while True:
+        try:
+            steve = Steve(user_name, config, logger)
+            break
+        except torch.cuda.OutOfMemoryError:
+            logger.warning(
+                {
+                    "role": "error",
+                    "message": "Ran out of memory, trying a smaller max_seq_len",
+                }
+            )
+            # reduce the max_seq_len by 8 until it works
+            config["max_seq_len"] -= 8
+    logger.info({"Max_seq_length": config["max_seq_len"]})
     while True:
         if steve.ask_for_input() is not None:
             try:
