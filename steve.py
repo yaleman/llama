@@ -8,7 +8,7 @@ from typing import List, Literal, TypedDict, Union
 from uuid import uuid4
 import click
 import questionary
-from llama.generation import ChatPrediction, Dialog, Llama, Message
+from llama.generation import ChatPrediction, Dialog, DialogOrderError, Llama, Message
 from llama.generation import PromptTooLongError
 
 from llama_steve import setup_logging
@@ -112,11 +112,21 @@ class Steve:
 
     def get_response(self) -> None:
         """get the chat response from the model"""
-        response: List[ChatPrediction] = self.llama.chat_completion(
-            [self.message_history],
-            execution_id=self.session_id,
-            temperature=self.config["temperature"],
-        )
+        try:
+            response: List[ChatPrediction] = self.llama.chat_completion(
+                [self.message_history],
+                execution_id=self.session_id,
+                temperature=self.config["temperature"],
+            )
+        except DialogOrderError as error:
+            self.logger.error(
+                {
+                    "error": error,
+                    "error_type": "DialogOrderError",
+                    "session_id": self.session_id,
+                }
+            )
+            return
 
         if len(response) > 1:
             self.show_message(

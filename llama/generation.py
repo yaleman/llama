@@ -32,6 +32,10 @@ class PromptTooLongError(Exception):
     """when your prompt's too long for us to deal with"""
 
 
+class DialogOrderError(Exception):
+    """when your prompt's too long for us to deal with"""
+
+
 class Message(TypedDict, total=False):
     """message in a dialog"""
 
@@ -554,12 +558,12 @@ class Llama:
                 for dialog_sub in dialog[2::]:
                     dialog_sub["dialog_id"] = dialog_id
                     dialog.append(dialog_sub)
-            assert all(msg.get("role", "") == "user" for msg in dialog[::2]) and all(
+            if not all(msg.get("role", "") == "user" for msg in dialog[::2]) and all(
                 msg.get("role", "") == "assistant" for msg in dialog[1::2]
-            ), (
-                "model only supports 'system', 'user' and 'assistant' roles, "
-                "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-            )
+            ):
+                raise DialogOrderError(
+                    "model only supports 'system', 'user' and 'assistant' roles, starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
+                )
 
             for dialog_sub in dialog:
                 dialog_sub["dialog_id"] = dialog_id
