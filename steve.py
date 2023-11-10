@@ -180,8 +180,18 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
                     "message": "Ran out of memory, trying a smaller max_seq_len",
                 }
             )
-            # reduce the max_seq_len by 8 until it works
-            config["max_seq_len"] -= 8
+            # reduce the max_seq_len by 32 until it works
+            config["max_seq_len"] -= 32
+        # pylint: disable=broad-except
+        except Exception as error:
+            logger.warning(
+                {
+                    "role": "error",
+                    "message": str(error),
+                }
+            )
+            # reduce the max_seq_len by 32 until it works
+            config["max_seq_len"] -= 32
     logger.info({"Max_seq_length": config["max_seq_len"]})
     while True:
         if steve.ask_for_input() is not None:
