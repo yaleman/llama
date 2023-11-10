@@ -1,0 +1,9 @@
+[project]
+name = "llama"
+version = "0.0.1"
+dependencies = [
+    "fire",
+    "torch",
+    "fairscale",
+    "sentencepiece",
+]
