@@ -11,7 +11,7 @@ import questionary
 from llama.generation import ChatPrediction, Dialog, Llama, Message
 from llama.generation import PromptTooLongError
 
-from . import setup_logging
+from llama_steve import setup_logging
 
 
 class Config(TypedDict):
