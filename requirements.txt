@@ -3,4 +3,3 @@ fairscale
 fire
 sentencepiece
 click
-llama_steve
