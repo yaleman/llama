@@ -184,6 +184,7 @@ def question_loop(config: Config, logger: logging.Logger) -> None:
                         "session_id": steve.session_id,
                     }
                 )
+                print(error)
                 break
 
 
