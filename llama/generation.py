@@ -309,10 +309,11 @@ class Llama:
         for k, t in enumerate(prompt_tokens):
             tokens[k, : len(t)] = torch.tensor(t, dtype=torch.long, device=self.device)
 
-        if logprobs:
-            token_logprobs = torch.zeros_like(tokens, dtype=torch.float)
-        else:
-            token_logprobs = None
+        # store the token probabilities if we're going to log them
+        token_logprobs = (
+            torch.zeros_like(tokens, dtype=torch.float) if logprobs else None
+        )
+
         prev_pos = 0
         eos_reached = torch.tensor([False] * bsz, device=self.device)
         input_text_mask = tokens != pad_id
@@ -325,11 +326,13 @@ class Llama:
                 ignore_index=pad_id,
             )
 
+        # iterate over the tokens in the prompt
         for cur_pos in range(min_prompt_len, total_len):
+            # send the model to the device to make sure it's up to date
             self.model.to(self.device)
+
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
-                # probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
                 next_token = sample_top_p(
                     torch.softmax(logits[:, -1] / temperature, dim=-1), top_p
                 )
@@ -359,6 +362,7 @@ class Llama:
         if logprobs and token_logprobs is not None:
             token_logprobs = token_logprobs.tolist()  # type: ignore
         out_tokens, out_logprobs = [], []
+
         for i, toks in enumerate(tokens.tolist()):
             # cut to max gen len
             start = 0 if echo else len(prompt_tokens[i])
@@ -373,6 +377,14 @@ class Llama:
                 if logprobs and token_logprobs is not None and probs is not None:
                     probs = probs[:eos_idx] if logprobs else None
             out_tokens.append(toks)
+
+            self.logger.info(
+                {
+                    "action": "generate_intermediate",
+                    "step": i,
+                    "tokens": self.tokenizer.decode(out_tokens),
+                }
+            )
             out_logprobs.append(probs)
 
         log_result: Dict[str, Any] = {
@@ -558,6 +570,7 @@ class Llama:
                 for dialog_sub in dialog[2::]:
                     dialog_sub["dialog_id"] = dialog_id
                     dialog.append(dialog_sub)
+            # validate the pattern of inputs
             if not all(msg.get("role", "") == "user" for msg in dialog[::2]) and all(
                 msg.get("role", "") == "assistant" for msg in dialog[1::2]
             ):
@@ -577,6 +590,7 @@ class Llama:
                 }
             )
 
+            # encode it as a list of ints so we can throw it into the model
             dialog_tokens: List[int] = sum(
                 [
                     self.tokenizer.encode(
@@ -591,9 +605,11 @@ class Llama:
                 ],
                 [],
             )
+
             assert (
                 dialog[-1].get("role", "") == "user"
             ), f"Last message must be from user, got {dialog[-1].get('role', '')}"
+
             dialog_tokens += self.tokenizer.encode(
                 f"{B_INST} {(dialog[-1].get('content', '')).strip()} {E_INST}",
                 bos=True,
