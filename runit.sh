@@ -53,7 +53,8 @@ torchrun --nproc_per_node "${NPROC_PER_NODE}" \
     --ckpt_dir "${MODEL_DIR}" \
     --tokenizer_path tokenizer.model \
     --max_seq_len "${MAX_SEQ_LEN}" \
-    --max_batch_size "${MAX_BATCH_SIZE}"
+    --max_batch_size "${MAX_BATCH_SIZE}" \
+    --standalone
 
 
 # if you get this: "AssertionError: Loading a checkpoint for MP=1 but world size is 12"
