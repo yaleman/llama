@@ -378,13 +378,14 @@ class Llama:
                     probs = probs[:eos_idx] if logprobs else None
             out_tokens.append(toks)
 
-            self.logger.info(
-                {
-                    "action": "generate_intermediate",
-                    "step": i,
-                    "tokens": self.tokenizer.decode(out_tokens),
-                }
-            )
+            # this is logging for each dialogue, not per-token
+            # self.logger.info(
+            #     {
+            #         "action": "generate_intermediate",
+            #         "step": i,
+            #         "tokens": self.tokenizer.decode(out_tokens),
+            #     }
+            # )
             out_logprobs.append(probs)
 
         log_result: Dict[str, Any] = {
